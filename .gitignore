@@ -1,0 +1,7 @@
+**/__pycache__/
+*.egg-info/
+*.pickle
+**/evaluation/
+**/raw_experiment/
+**/images/
+*.ipynb
