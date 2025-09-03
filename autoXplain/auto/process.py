@@ -23,8 +23,9 @@ import PIL.Image
 
 def get_image_hash(image_path):
     """Generate MD5 hash for image content"""
-    with open(image_path, 'rb') as f:
-        return hashlib.md5(f.read()).hexdigest()
+    # with open(image_path, 'rb') as f:
+    #     return hashlib.md5(f.read()).hexdigest()
+    return os.path.basename(image_path) # currently dont need to hash the image
 
 def create_directory_structure(save_dir):
     """Create necessary subdirectories in save directory"""
