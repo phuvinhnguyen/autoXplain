@@ -58,7 +58,7 @@ def process_image(image_path,
                   labels,
                   api_tokens,
                   cam_type,
-                  prompt, api_index=0, slope=25, position=0.6, model_type='classification'):
+                  prompt, api_index=0, slope=25, position=0.6, model_type='classification', delay_seconds=7):
     """Process a single image with structured saving"""
     create_directory_structure(save_dir)
     image_hash = get_image_hash(image_path)
@@ -81,7 +81,7 @@ def process_image(image_path,
 
     for _ in range(7):
         try:
-            sleep(7)  # prevent exceed quota
+            sleep(delay_seconds)  # prevent exceed quota
             if len(api_tokens) != 0:
                 api_index = api_index % len(api_tokens)
                 agent.bot.api_key = api_tokens[api_index]
@@ -180,7 +180,7 @@ def process_folder(input_folder,
                    cam_type='gradcam',
                    vlm_model='gemini/gemini-1.5-flash',
                    prompt=1,
-                   slope=25, position=0.6, labels=None, model_type='classification'):
+                   slope=25, position=0.6, labels=None, model_type='classification', delay_seconds=7):
     """
     Process all images in a folder using the autoXplain pipeline
     
@@ -237,7 +237,7 @@ def process_folder(input_folder,
                 model=model,
                 labels=labels,
                 api_tokens=api_tokens,
-                cam_type=cam_type, prompt=prompt, slope=slope, position=position, model_type=model_type)
+                cam_type=cam_type, prompt=prompt, slope=slope, position=position, model_type=model_type, delay_seconds=delay_seconds)
             result['label'] = label
             result['threshold'] = threshold
             results.append(result)
