@@ -96,19 +96,7 @@ def process_image(image_path,
             print(f"Error processing {image_path}: {e}")
             print(f"Full traceback: {traceback.format_exc()}")
     
-    if not result:
-        result = {
-            'original': image_path,
-            'image': str(original_dest),
-            'label': 'unk',
-            'description': '',
-            'justification': '',
-            'score': -1,
-            'prediction': 'unk',
-            'saliency': '',
-            'maskedcam': '',
-            'cam_type': cam_type
-        }
+    if not result: return None #mean the img not present in labels
     else:
         # Save processed images
         saliency_path = Path(save_dir) / 'saliency' / f"{image_hash}.jpg"
@@ -220,7 +208,8 @@ def process_folder(input_folder,
 
     print(f"Processing {len(list(Path(input_folder).glob('*')))} images... in {input_folder}")
 
-    for image_file in Path(input_folder).glob('*'):
+    total = len(list(Path(input_folder).glob('*')))
+    for count, image_file in enumerate(Path(input_folder).glob('*')):
         if image_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
             # Extract label from filename (format: id_label.extension)
             filename = image_file.stem
@@ -238,10 +227,12 @@ def process_folder(input_folder,
                 labels=labels,
                 api_tokens=api_tokens,
                 cam_type=cam_type, prompt=prompt, slope=slope, position=position, model_type=model_type, delay_seconds=delay_seconds)
+            
+            if result is None: continue
             result['label'] = label
             result['threshold'] = threshold
             results.append(result)
-            print(f"Completed {image_file} - Score: {result['score']}, Prediction: {result['prediction']}, Label: {label}")
+            print(f"{count}/{total}\t| {image_file} - Score: {result['score']}, Prediction: {result['prediction']}, Label: {label}")
 
     # Generate final report
     report = generate_final_report(results)

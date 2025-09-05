@@ -146,3 +146,14 @@ The pipeline follows these steps:
 - Google API key for Gemini model (by default)
 
 <span style="float: right; font-size: 10px; color: gray;">V-003</span>
+
+## Citation
+If you use this code or [paper](https://arxiv.org/abs/2508.20227), please cite it as follows:
+```cite
+@article{nguyen2025novel,
+  title={A Novel Framework for Automated Explain Vision Model Using Vision-Language Models},
+  author={Nguyen, Phu-Vinh and Pham, Tan-Hanh and Ngo, Chris and Hy, Truong Son},
+  journal={arXiv preprint arXiv:2508.20227},
+  year={2025}
+}
+```
