@@ -27,7 +27,7 @@ def parse_bot_output(bot_output):
     return result
 
 
-class OldMaskedCamJudge(CamJudge):
+class OldMaskedCamJudge(ExtractCAM):
     PROMPT = '''Task: Conduct an evaluation of the model's attention mechanism by analyzing its response to the supplied masked image. This assessment aims to test the model's capacity to effectively interpret and utilize attention when processing partially obscured visual data.
 
 Image Description:
@@ -72,12 +72,35 @@ Output Format:
     "justification": [your justification],
     "score": [score]
 }}'''
+    modifies = ('description', 'justification', 'score', 'prediction', 'label', 'saliency', 'maskedcam')
+
+    def __init__(self, bot, cam_class, model, layer=0, labels=[], slope=25, position=0.4, prediction_of_preprocesed_image=None, **kwargs):
+        super().__init__(cam_class, model, layer, slope, position, **kwargs)
+        self.bot = bot
+        self.labels = labels
+        self.prediction_of_preprocesed_image = prediction_of_preprocesed_image
 
     def extract_answer(self, text):
         output = parse_bot_output(text)
         return output
 
-class OldOriginalCamJudge(CamJudge):
+    def process(self, image, label):
+        if self.prediction_of_preprocesed_image == None:
+            if self.model_type != 'classification' and label in self.labels:
+                target_class_idx = self.labels.index(label)
+            else:
+                target_class_idx = None
+            saliency, masked_cam, prediction, _ = super().process(image, target_class_idx)
+            prediction['prediction'] = self.labels[prediction['class_idx']]
+        else:
+            saliency, masked_cam = None, image
+            prediction = {'prediction': self.prediction_of_preprocesed_image}
+        result = self.bot.run([('user', [pil_to_tempfile_path(masked_cam), self.PROMPT.format(object=prediction['prediction'])])])
+        result = self.extract_answer(result['content'][0]['text'])[-1]
+        return result['args']['description'], result['args']['justification'], get_first_number(result['args']['score']), prediction, label, saliency, masked_cam
+
+
+class OldOriginalCamJudge(ExtractCAM):
     PROMPT = '''Task: Conduct an evaluation of the model's attention mechanism by analyzing its response to the supplied CAM heatmap. This assessment aims to test the model's capacity to effectively interpret and utilize attention when processing visual data.
 
 Image Description:
@@ -122,6 +145,13 @@ Output Format:
     "justification": [your justification],
     "score": [score]
 }}'''
+    modifies = ('description', 'justification', 'score', 'prediction', 'label', 'saliency', 'maskedcam')
+
+    def __init__(self, bot, cam_class, model, layer=0, labels=[], slope=25, position=0.4, prediction_of_preprocesed_image=None, **kwargs):
+        super().__init__(cam_class, model, layer, slope, position, **kwargs)
+        self.bot = bot
+        self.labels = labels
+        self.prediction_of_preprocesed_image = prediction_of_preprocesed_image
 
     def process(self, image, label):
         if self.prediction_of_preprocesed_image == None:
