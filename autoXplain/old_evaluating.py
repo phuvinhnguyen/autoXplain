@@ -18,7 +18,7 @@ def parse_bot_output(bot_output):
             output_dict = json.loads(match)
             if all(k in output_dict for k in ["evaluation", "score", "justification"]):
                 result['description'] = output_dict['evaluation']
-                result['score'] = output_dict['score']
+                result['score'] = str(output_dict['score'])
                 result['justification'] = output_dict['justification']
                 break  # Stop at the first valid match
         except json.JSONDecodeError:
@@ -103,48 +103,49 @@ Output Format:
 class OldOriginalCamJudge(ExtractCAM):
     PROMPT = '''Task: Conduct an evaluation of the model's attention mechanism by analyzing its response to the supplied CAM heatmap. This assessment aims to test the model's capacity to effectively interpret and utilize attention when processing visual data.
 
-Image Description:
-
+Note:
     1. The input image is a CAM heatmap sourced from a highly reputable dataset widely used in research, known for its quality and reliability. It originates from ImageNet 1K, a standard benchmark in the research community, ensuring it meets all necessary standards for academic and scientific work.
     2. The heatmap uses warm colors (orange, red) to represent areas where the model is focusing most, while cool colors (blue, purple, dark) indicate regions of little to no attention.
     3. The model's focus is on the {object}.
     4. Identify the warm-colored regions and analyze what those regions represent in relation to the object of interest. Additionally, assess the presence of cool-colored regions and their alignment with irrelevant areas or the background.
 
 Evaluation Criteria:
+    1. Focus Accuracy: Analyze which part of the heatmap the warm colors (orange, red) highlight. Is the model's attention accurately placed on the {object}, or is it scattered across other areas?
+    2. Object Recognition: Determine if the model is correctly recognizing the {object}. Is the attention primarily on the correct object, or does the model focus on irrelevant areas?
+    3. Object Coverage: Evaluate how much of the object is being captured by the model's attention. Is the entire object covered, only a small part, or none at all?
+    4. Background and Irrelevant Focus: Check for any significant focus on cool-colored regions. Does this distract the model from the primary object?
+    5. Explanatory Analysis: Provide possible reasons for the model's attention pattern. Consider whether the model is being misled by similarly colored areas, complex backgrounds, or other visual challenges.
 
-    Focus Accuracy: Analyze which part of the heatmap the warm colors (orange, red) highlight. Is the model's attention accurately placed on the {object}, or is it scattered across other areas?
-    Object Recognition: Determine if the model is correctly recognizing the {object}. Is the attention primarily on the correct object, or does the model focus on irrelevant areas?
-    Object Coverage: Evaluate how much of the object is being captured by the model's attention. Is the entire object covered, only a small part, or none at all?
-    Background and Irrelevant Focus: Check for any significant focus on cool-colored regions. Does this distract the model from the primary object?
-    Explanatory Analysis: Provide possible reasons for the model's attention pattern. Consider whether the model is being misled by similarly colored areas, complex backgrounds, or other visual challenges.
+To ensure the program work flawlessly, your answer must call a function follow exactly this template:
+<function>
+<parameter description>
+- Describe the attended regions in the CAM heatmap.
+- How much of the {object} is highlighted (partially, fully, or not at all)?
+- Do these visible areas align well with the {object}?
+- Is the model focusing on any irrelevant regions or background (limited attention to the {object})?
+- Why might the model be attending to those specific regions (e.g., similarity, shape, color, distractions)?
+</parameter>
+<parameter justification>
+Based on the attention pattern observed, provide a clear reason for the score you assign.
+</parameter>
+<parameter score>
+Give a single number, score from 0 to 5:
+- 0: Completely scattered or irrelevant attention
+- 1: Consistently focuses on the wrong object.
+- 2: Minor overlap with the object, mostly incorrect focus.
+- 3: Some correct focus on the object, but also includes irrelevant regions.
+- 4: Mostly correct focus, with minor background distractions.
+- 5: Fully accurate attention on the object, no distractions.
+</parameter>
+</function>
 
-Scoring:
-
-Assign a score between 0 and 5 based on the relevance and accuracy of the model's attention:
-
-    0: The model's attention is scattered with no clear target, showing it does not understand the task or the object.
-    1: The model consistently directs its attention to something unrelated to {object}, indicating a fundamental misunderstanding of the {object} it is supposed to recognize.
-    2: Partial object recognition: The model captures only a small fragment of the {object}, missing most of its critical features. The attention is mostly misdirected, with just minor alignment to the actual object.
-    3: The model identifies a limited area of {object}, but its attention still includes some irrelevant parts surrounding it.
-    4: The model predominantly focuses on {object}, with only minor distractions or irrelevant attention in the background.
-    5: The model accurately captures the entire {object} without any distractions from irrelevant areas or background elements.
-
-Output Format:
-
-    Evaluation: Provide a concise evaluation (5-6 sentences), discussing:
-        Where the heatmap focuses (warm colors).
-        Whether the attention aligns with the {object}.
-        Whether there is any significant focus on irrelevant areas or the background.
-        Explain why the model might be focusing on specific regions.
-
-    Score: Assign a score from 0 to 5, justifying your rating in a sentence.
-
-    Your output format must be presented in a dictionary as follows, which is extremely important for the evaluation process to run without any error:
-{{
-    "evaluation": [your evaluation],
-    "justification": [your justification],
-    "score": [score]
-}}'''
+<IMPORTANT>
+- The model considers the masked image as proof of {object}. Debate based on this.
+- Function calls MUST follow the specified format, start with <function and end with </function>.
+- Required parameters MUST follow the specified format, start with <parameter example_parameter> and end with </parameter>.
+- You can only call one function each turn.
+- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after.
+'''
     modifies = ('description', 'justification', 'score', 'prediction', 'label', 'saliency', 'maskedcam')
 
     def __init__(self, bot, cam_class, model, layer=0, labels=[], slope=25, position=0.4, prediction_of_preprocesed_image=None, **kwargs):
@@ -165,8 +166,8 @@ Output Format:
             saliency, masked_cam = image, None
             prediction = {'prediction': self.prediction_of_preprocesed_image}
         result = self.bot.run([('user', [pil_to_tempfile_path(saliency), self.PROMPT.format(object=prediction['prediction'])])])
-        result = self.extract_answer(result['content'][0]['text'])
-        return result['description'], result['justification'], get_first_number(result['score']), prediction, label, saliency, masked_cam
+        result = self.extract_answer(result['content'][0]['text'])[-1]
+        return result['args']['description'], result['args']['justification'], get_first_number(result['args']['score']), prediction, label, saliency, masked_cam
 
     def extract_answer(self, text):
-        return parse_bot_output(text)
+        return extract_function_calls(text)
