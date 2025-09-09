@@ -3,7 +3,17 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 
+# Force headless backend to avoid GTK import errors
+os.environ.setdefault("MPLBACKEND", "Agg")
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+except Exception:
+    # If matplotlib is not present or fails to set, ignore
+    pass
+
 import gradio as gr
+from PIL import Image
 
 
 def list_samples(base_dir: str) -> List[str]:
@@ -26,22 +36,39 @@ def load_metadata(base_dir: str, meta_name: str) -> Dict[str, Any]:
 
 
 def get_maskedcam_path(base_dir: str, meta: Dict[str, Any]) -> str:
-    """Resolve maskedcam image path. Prefer explicit path in json; otherwise build from stem."""
-    if isinstance(meta.get("maskedcam"), str) and meta["maskedcam"]:
-        # If path is relative, resolve from base_dir
-        maskedcam_path = Path(meta["maskedcam"])  # may be relative like '.../maskedcam/xxx.jpg'
-        if not maskedcam_path.is_absolute():
-            maskedcam_path = Path(base_dir) / maskedcam_path
-        return str(maskedcam_path)
+    """Resolve maskedcam image path robustly.
+
+    Tries in order:
+    1) as-is if absolute
+    2) relative to base_dir
+    3) relative to parent of base_dir
+    4) base_dir/maskedcam/basename
+    5) infer from image_hash with common extensions
+    """
+    masked = meta.get("maskedcam")
+    if isinstance(masked, str) and masked:
+        p = Path(masked)
+        candidates = []
+        if p.is_absolute():
+            candidates.append(p)
+        else:
+            candidates.append(Path(base_dir) / p)
+            candidates.append(Path(base_dir).parent / p)
+            candidates.append(Path(base_dir) / "maskedcam" / p.name)
+        for c in candidates:
+            if c.exists():
+                return str(c)
+        # Fall through to hash-based inference
     # Fallback: infer from metadata filename if present
     image_hash = meta.get("image_hash")
     if image_hash:
-        candidate = Path(base_dir) / "maskedcam" / f"{image_hash}"
-        if candidate.exists():
-            return str(candidate)
-        # Try common image extensions
-        for ext in [".jpg", ".png", ".jpeg"]:
-            c = candidate.with_suffix(ext)
+        base = Path(base_dir) / "maskedcam"
+        # If image_hash already has extension, try directly
+        direct = base / image_hash
+        if direct.exists():
+            return str(direct)
+        for ext in [".jpg", ".jpeg", ".png"]:
+            c = base / f"{image_hash}{ext if not str(image_hash).lower().endswith(ext) else ''}"
             if c.exists():
                 return str(c)
     # As last resort, return empty
@@ -67,6 +94,8 @@ def save_human_score(base_dir: str, meta_name: str, meta: Dict[str, Any], score:
     # Shallow copy and append human_score
     data = dict(meta)
     data["human_score"] = score
+    # Preserve model justification alongside human score for reference
+    data["human_justification"] = meta.get("justification", "")
     with open(out_path, "w") as f:
         json.dump(data, f, indent=2)
     return str(out_path)
@@ -103,14 +132,28 @@ def build_ui():
                 label = gr.Textbox(label="Label", interactive=False)
                 pred = gr.Textbox(label="Prediction", interactive=False)
                 desc = gr.Textbox(label="Description", lines=4, interactive=False)
+                justify_view = gr.Textbox(label="Justification", lines=3, interactive=False)
 
         with gr.Row():
-            score = gr.Slider(0, 5, value=0, step=1, label="Human Score (0-5)")
-            save_btn = gr.Button("Save Score", variant="primary")
+            gr.Markdown("**Choose score:**")
+            b0 = gr.Button("0")
+            b1 = gr.Button("1")
+            b2 = gr.Button("2")
+            b3 = gr.Button("3")
+            b4 = gr.Button("4")
+            b5 = gr.Button("5")
 
         with gr.Row():
             prev_btn = gr.Button("Prev")
             next_btn = gr.Button("Next")
+
+        def _load_image(path: str):
+            try:
+                if path and Path(path).exists():
+                    return Image.open(path).convert("RGB")
+            except Exception:
+                return None
+            return None
 
         def do_load(dir_path: str):
             files = list_samples(dir_path)
@@ -118,11 +161,12 @@ def build_ui():
             done, total = count_progress(dir_path)
             st = {"base_dir": dir_path, "files": files, "index": idx}
             if not files:
-                return st, None, "", "", "", "", f"{done}/{total}"
+                return st, None, "", "", "", "", f"{done}/{total}", ""
             meta = load_metadata(dir_path, files[idx])
             image_path = get_maskedcam_path(dir_path, meta)
+            image_obj = _load_image(image_path)
             lab, pr = get_label_and_prediction(meta)
-            return st, image_path, files[idx], lab, pr, meta.get("description", ""), f"{done}/{total}"
+            return st, image_obj, files[idx], lab, pr, meta.get("description", ""), f"{done}/{total}", meta.get("justification", "")
 
         def update_view(st: Dict[str, Any]):
             base = st.get("base_dir", "")
@@ -130,13 +174,14 @@ def build_ui():
             idx = st.get("index", 0)
             if not files:
                 done, total = count_progress(base)
-                return None, "", "", "", "", f"{done}/{total}"
+                return None, "", "", "", "", f"{done}/{total}", ""
             idx = max(0, min(idx, len(files) - 1))
             meta = load_metadata(base, files[idx])
             image_path = get_maskedcam_path(base, meta)
+            image_obj = _load_image(image_path)
             lab, pr = get_label_and_prediction(meta)
             done, total = count_progress(base)
-            return image_path, files[idx], lab, pr, meta.get("description", ""), f"{done}/{total}"
+            return image_obj, files[idx], lab, pr, meta.get("description", ""), f"{done}/{total}", meta.get("justification", "")
 
         def go_next(st: Dict[str, Any]):
             st = dict(st)
@@ -166,26 +211,27 @@ def build_ui():
         load_btn.click(
             do_load,
             [base_dir],
-            [state, img, fname, label, pred, desc, progress],
+            [state, img, fname, label, pred, desc, progress, justify_view],
         )
 
         next_btn.click(
             go_next,
             [state],
-            [state, img, fname, label, pred, desc, progress],
+            [state, img, fname, label, pred, desc, progress, justify_view],
         )
 
         prev_btn.click(
             go_prev,
             [state],
-            [state, img, fname, label, pred, desc, progress],
+            [state, img, fname, label, pred, desc, progress, justify_view],
         )
 
-        save_btn.click(
-            do_save,
-            [state, score],
-            [state, img, fname, label, pred, desc, progress],
-        )
+        b0.click(lambda s: do_save(s, 0), [state], [state, img, fname, label, pred, desc, progress, justify_view])
+        b1.click(lambda s: do_save(s, 1), [state], [state, img, fname, label, pred, desc, progress, justify_view])
+        b2.click(lambda s: do_save(s, 2), [state], [state, img, fname, label, pred, desc, progress, justify_view])
+        b3.click(lambda s: do_save(s, 3), [state], [state, img, fname, label, pred, desc, progress, justify_view])
+        b4.click(lambda s: do_save(s, 4), [state], [state, img, fname, label, pred, desc, progress, justify_view])
+        b5.click(lambda s: do_save(s, 5), [state], [state, img, fname, label, pred, desc, progress, justify_view])
 
     return demo
 

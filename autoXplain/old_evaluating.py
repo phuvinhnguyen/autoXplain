@@ -76,20 +76,8 @@ Output Format:
     def extract_answer(self, text):
         output = parse_bot_output(text)
         return output
-    
-    def process(self, image, label):
-        if self.prediction_of_preprocesed_image == None:
-            saliency, masked_cam, prediction, _ = super().process(image)
-            prediction['prediction'] = self.labels[prediction['class_idx']]
-        else:
-            saliency, masked_cam = None, image
-            prediction = {'prediction': self.prediction_of_preprocesed_image}
-        result = self.bot.run([('user', [pil_to_tempfile_path(masked_cam), self.PROMPT.format(object=prediction['prediction'])])])
-        result = self.extract_answer(result['content'][0]['text'])
-        return result['answer'], result['justification'], str(result['score']), prediction, label, saliency, masked_cam
-    
 
-class OldOriginalCamJudge(OldMaskedCamJudge):
+class OldOriginalCamJudge(CamJudge):
     PROMPT = '''Task: Conduct an evaluation of the model's attention mechanism by analyzing its response to the supplied CAM heatmap. This assessment aims to test the model's capacity to effectively interpret and utilize attention when processing visual data.
 
 Image Description:
@@ -134,6 +122,21 @@ Output Format:
     "justification": [your justification],
     "score": [score]
 }}'''
+
+    def process(self, image, label):
+        if self.prediction_of_preprocesed_image == None:
+            if self.model_type != 'classification' and label in self.labels:
+                target_class_idx = self.labels.index(label)
+            else:
+                target_class_idx = None
+            saliency, masked_cam, prediction, _ = super().process(image, target_class_idx)
+            prediction['prediction'] = self.labels[prediction['class_idx']]
+        else:
+            saliency, masked_cam = image, None
+            prediction = {'prediction': self.prediction_of_preprocesed_image}
+        result = self.bot.run([('user', [pil_to_tempfile_path(saliency), self.PROMPT.format(object=prediction['prediction'])])])
+        result = self.extract_answer(result['content'][0]['text'])[-1]
+        return result['args']['description'], result['args']['justification'], get_first_number(result['args']['score']), prediction, label, saliency, masked_cam
 
     def extract_answer(self, text):
         return parse_bot_output(text)
