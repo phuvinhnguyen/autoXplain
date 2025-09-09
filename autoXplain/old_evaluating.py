@@ -3,7 +3,7 @@ import re, json
 
 def parse_bot_output(bot_output):
     result = {
-        'answer': None,
+        'description': None,
         'score': None,
         'justification': None,
         'bot_output': bot_output
@@ -17,7 +17,7 @@ def parse_bot_output(bot_output):
         try:
             output_dict = json.loads(match)
             if all(k in output_dict for k in ["evaluation", "score", "justification"]):
-                result['answer'] = output_dict['evaluation']
+                result['description'] = output_dict['evaluation']
                 result['score'] = output_dict['score']
                 result['justification'] = output_dict['justification']
                 break  # Stop at the first valid match
@@ -96,8 +96,8 @@ Output Format:
             saliency, masked_cam = None, image
             prediction = {'prediction': self.prediction_of_preprocesed_image}
         result = self.bot.run([('user', [pil_to_tempfile_path(masked_cam), self.PROMPT.format(object=prediction['prediction'])])])
-        result = self.extract_answer(result['content'][0]['text'])[-1]
-        return result['args']['description'], result['args']['justification'], get_first_number(result['args']['score']), prediction, label, saliency, masked_cam
+        result = self.extract_answer(result['content'][0]['text'])
+        return result['description'], result['justification'], get_first_number(result['score']), prediction, label, saliency, masked_cam
 
 
 class OldOriginalCamJudge(ExtractCAM):
@@ -165,8 +165,8 @@ Output Format:
             saliency, masked_cam = image, None
             prediction = {'prediction': self.prediction_of_preprocesed_image}
         result = self.bot.run([('user', [pil_to_tempfile_path(saliency), self.PROMPT.format(object=prediction['prediction'])])])
-        result = self.extract_answer(result['content'][0]['text'])[-1]
-        return result['args']['description'], result['args']['justification'], get_first_number(result['args']['score']), prediction, label, saliency, masked_cam
+        result = self.extract_answer(result['content'][0]['text'])
+        return result['description'], result['justification'], get_first_number(result['score']), prediction, label, saliency, masked_cam
 
     def extract_answer(self, text):
         return parse_bot_output(text)
