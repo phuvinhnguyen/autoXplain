@@ -7,6 +7,7 @@ from time import sleep
 import traceback
 
 from autoXplain.evaluating import CamJudge, PROMPT_1, PROMPT_2, PROMPT_3
+from autoXplain.old_evaluating import OldMaskedCamJudge, OldOriginalCamJudge
 from FlowDesign.litellm import LLMInference
 from torchcam.methods import (
     GradCAM,
@@ -20,6 +21,13 @@ from torchcam.methods import (
 from torchvision import models
 import urllib.request
 import PIL.Image
+
+METHODS = {
+    'maskedcam': CamJudge,
+    'oldmaskedcam': OldMaskedCamJudge,
+    'oldoriginalcam': OldOriginalCamJudge,
+}
+
 
 def get_image_hash(image_path):
     """Generate MD5 hash for image content"""
@@ -51,14 +59,21 @@ def get_cam_method(cam_type):
     
     return cam_methods[cam_type]
 
-def process_image(image_path,
-                  save_dir,
-                  bot,
-                  model,
-                  labels,
-                  api_tokens,
-                  cam_type,
-                  prompt, api_index=0, slope=25, position=0.6, model_type='classification', delay_seconds=7):
+def process_image(
+    image_path,
+    save_dir,
+    bot,
+    model,
+    labels,
+    api_tokens,
+    cam_type,
+    prompt,
+    method='maskedcam',
+    api_index=0,
+    slope=25,
+    position=0.6,
+    model_type='classification',
+    delay_seconds=7):
     """Process a single image with structured saving"""
     create_directory_structure(save_dir)
     image_hash = get_image_hash(image_path)
@@ -76,7 +91,7 @@ def process_image(image_path,
     # Process image
     result = None
     cam_method = get_cam_method(cam_type)
-    agent = CamJudge(bot, cam_method, model, labels=labels, slope=slope, position=position, model_type=model_type)
+    agent = METHODS[method](bot, cam_method, model, labels=labels, slope=slope, position=position, model_type=model_type)
     agent.PROMPT = PROMPT_1 if prompt == 1 else PROMPT_2 if prompt == 2 else PROMPT_3
 
     for _ in range(7):
@@ -161,6 +176,7 @@ def generate_final_report(results):
 
 def process_folder(input_folder,
                    save_dir,
+                   method='maskedcam',
                    model_name='resnet18',
                    model=None,
                    api_key=None,
@@ -226,6 +242,7 @@ def process_folder(input_folder,
                 model=model,
                 labels=labels,
                 api_tokens=api_tokens,
+                method=method,
                 cam_type=cam_type, prompt=prompt, slope=slope, position=position, model_type=model_type, delay_seconds=delay_seconds)
             
             if result is None: continue
@@ -249,6 +266,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process images using autoXplain pipeline')
     parser.add_argument('input_folder', help='Path to folder containing images')
+    parser.add_argument('--method', default='maskedcam', help='Method to use', choices=METHODS.keys())
     parser.add_argument('--save_dir', default='autoXplain_results', help='Path to save processed results')
     parser.add_argument('--model', default='resnet18', help='Model to use')
     parser.add_argument('--api_key', help='Google API key for Gemini model')
@@ -263,7 +281,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     results, report = process_folder(args.input_folder, args.save_dir, args.model, 
-                                   args.api_key, args.threshold, args.cam_type, args.vlm_model, args.prompt)
+                                   args.api_key, args.threshold, args.cam_type, args.vlm_model, args.prompt, method=args.method)
     print(f"\nProcessed {len(results)} images")
     print(f"Results saved to {args.save_dir}")
     print("\nFinal Report Summary:")
