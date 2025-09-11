@@ -140,7 +140,7 @@ Give a single number, score from 0 to 5:
 </function>
 
 <IMPORTANT>
-- The model considers the masked image as proof of {object}. Debate based on this.
+- The model considers the heatmap image as proof of {object}. Debate based on this.
 - Function calls MUST follow the specified format, start with <function and end with </function>.
 - Required parameters MUST follow the specified format, start with <parameter example_parameter> and end with </parameter>.
 - You can only call one function each turn.

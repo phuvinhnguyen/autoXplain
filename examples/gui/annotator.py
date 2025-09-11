@@ -28,6 +28,16 @@ def list_samples(base_dir: str) -> List[str]:
     return files
 
 
+def list_unannotated_samples(base_dir: str) -> List[str]:
+    """Return metadata filenames that do not yet exist in human_annot."""
+    all_meta = list_samples(base_dir)
+    human_dir = Path(base_dir) / "human_annot"
+    if not human_dir.exists():
+        return all_meta
+    done_names = {p.name for p in human_dir.glob("*.json")}
+    return [name for name in all_meta if name not in done_names]
+
+
 def load_metadata(base_dir: str, meta_name: str) -> Dict[str, Any]:
     """Load one metadata json by name (e.g., '0_banana.jpg.json')."""
     path = Path(base_dir) / "metadata" / meta_name
@@ -121,7 +131,7 @@ def build_ui():
         gr.Markdown("**Human Annotation Tool** — select the experiment folder containing `metadata/` and `maskedcam/`.")
 
         with gr.Row():
-            base_dir = gr.Textbox(label="Experiment Folder", value="/home/kat/Desktop/FPTAI/autoXplain/examples/raw_experiment/explanation_output_resnet18_20250905_163859")
+            base_dir = gr.Textbox(label="Experiment Folder", value="/home/kat/Desktop/FPTAI/autoXplain/examples/raw_experiment/explanation_maskedcam_gemini25flashlite_resnet18")
             load_btn = gr.Button("Load", variant="primary")
             progress = gr.Label(value="0/0")
 
@@ -156,7 +166,7 @@ def build_ui():
             return None
 
         def do_load(dir_path: str):
-            files = list_samples(dir_path)
+            files = list_unannotated_samples(dir_path)
             idx = 0
             done, total = count_progress(dir_path)
             st = {"base_dir": dir_path, "files": files, "index": idx}
