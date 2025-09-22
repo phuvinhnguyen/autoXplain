@@ -28,7 +28,6 @@ METHODS = {
     'oldoriginalcam': OldOriginalCamJudge,
 }
 
-
 def get_image_hash(image_path):
     """Generate MD5 hash for image content"""
     # with open(image_path, 'rb') as f:

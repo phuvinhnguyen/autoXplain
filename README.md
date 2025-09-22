@@ -125,35 +125,3 @@ The pipeline follows these steps:
 3. Uses VLMs to evaluate and score samples
 4. Computes confusion matrix of VLMs' judgment and accuracy
 5. Generates comprehensive reports and visualizations
-
-## Supported CAM Methods
-
-- **GradCAM**: Standard gradient-based class activation mapping
-- **SmoothGradCAM++**: Improved version with noise reduction
-- **GradCAM++**: Enhanced version with better localization
-- **CAM**: Original Class Activation Mapping
-- **ScoreCAM**: Score-weighted class activation mapping
-- **LayerCAM**: Layer-wise class activation mapping
-- **XGradCAM**: Extended gradient-based class activation mapping
-
-## Requirements
-
-- Python 3.7+
-- PyTorch
-- torchvision
-- torchcam
-- FlowDesign
-- Google API key for Gemini model (by default)
-
-<span style="float: right; font-size: 10px; color: gray;">V-003</span>
-
-## Citation
-If you use this code or [paper](https://arxiv.org/abs/2508.20227), please cite it as follows:
-```cite
-@article{nguyen2025novel,
-  title={A Novel Framework for Automated Explain Vision Model Using Vision-Language Models},
-  author={Nguyen, Phu-Vinh and Pham, Tan-Hanh and Ngo, Chris and Hy, Truong Son},
-  journal={arXiv preprint arXiv:2508.20227},
-  year={2025}
-}
-```
