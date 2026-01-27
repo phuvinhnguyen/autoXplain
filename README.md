@@ -125,3 +125,15 @@ The pipeline follows these steps:
 3. Uses VLMs to evaluate and score samples
 4. Computes confusion matrix of VLMs' judgment and accuracy
 5. Generates comprehensive reports and visualizations
+
+## Citation
+If you want to use this work in your research, please cite the following paper:
+
+```bib
+@article{nguyen2025novel,
+  title={A Novel Framework for Automated Explain Vision Model Using Vision-Language Models},
+  author={Nguyen, Phu-Vinh and Pham, Tan-Hanh and Ngo, Chris and Hy, Truong Son},
+  journal={arXiv preprint arXiv:2508.20227},
+  year={2025}
+}
+```
