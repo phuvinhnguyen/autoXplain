@@ -1,0 +1,21 @@
+# AverageDrop on PASTA test set
+explain:
+  method: AverageDrop
+  saliency:
+    method: CAMSaliency
+    cam: GradCAM
+    layer: 0
+    slope: 25
+    position: 0.4
+  kwargs: {}
+
+datasets:
+  - name: pasta_test_AvgDrop
+    path: /home/phng1216/Thesis/PASTA/PASTA/test_imgs
+    model:
+      source: torchvision
+      name: resnet18
+      model_type: classification
+      weight: DEFAULT
+
+output: /home/phng1216/Thesis/autoXplain/outputs

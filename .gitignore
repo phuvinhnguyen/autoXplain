@@ -6,3 +6,6 @@
 **/images/
 *.ipynb
 **/examples/
+outputs/
+datasets/
+test/

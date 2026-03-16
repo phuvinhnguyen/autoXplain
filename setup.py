@@ -10,9 +10,13 @@ setup(
     description=long_description,
     packages=find_packages(),  # Automatically find packages in your project
     install_requires=[
-        "FlowDesign>=0.1.0",
-        "torchcam>=0.4.0",  # PyTorch for deep learning
-        "torchvision>=0.10.0",  # torchvision for image processing utilities
+        "torch>=2.0.0",
+        "torchvision>=0.10.0",
+        "torchcam>=0.4.0",
+        "scikit-learn",
+        "pyyaml",
+        "pillow",
+        "numpy",
     ],
     include_package_data=True,  # Include data files specified in package_data
 )

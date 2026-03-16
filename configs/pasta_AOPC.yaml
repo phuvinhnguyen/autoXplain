@@ -1,0 +1,22 @@
+# AOPC (Area Over Perturbation Curve) on PASTA test set
+explain:
+  method: AOPC
+  saliency:
+    method: CAMSaliency
+    cam: GradCAM
+    layer: 0
+    slope: 25
+    position: 0.4
+  kwargs:
+    steps: 30
+
+datasets:
+  - name: pasta_test_AOPC
+    path: /home/phng1216/Thesis/PASTA/PASTA/test_imgs
+    model:
+      source: torchvision
+      name: resnet18
+      model_type: classification
+      weight: DEFAULT
+
+output: /home/phng1216/Thesis/autoXplain/outputs
