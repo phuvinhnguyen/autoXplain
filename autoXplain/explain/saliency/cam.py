@@ -66,6 +66,7 @@ class CAMSaliency(BaseExplainer):
                 model_type=self.model_type,
                 slope=self.slope, position=self.position,
             )
+            r['id'] = str(path).split('/')[-1].split('.')[0]
             out['saliency_images'].append(r['cam_image'])
             out['masked_images'].append(r['masked_image'])
             out['heatmaps'].append(r['heatmap'])

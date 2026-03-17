@@ -2,7 +2,7 @@ import re
 import tempfile
 from functools import partial
 from typing import List, Optional, Tuple
-
+import pathlib
 import numpy as np
 import torch
 from torch import Tensor, nn
@@ -67,7 +67,7 @@ class DetectionWrapper(nn.Module):
 # ---------------------------------------------------------------------------
 
 def load_image(image) -> Image.Image:
-    if isinstance(image, str):
+    if isinstance(image, str) or isinstance(image, pathlib.Path):
         return Image.open(image).convert('RGB')
     return image.convert('RGB')
 

@@ -10,9 +10,10 @@ from autoXplain.explain.score.base import score, BaseScoreExplainer
 class DaI(BaseScoreExplainer):
     """Deletion and Insertion AUC score (classification only)."""
 
-    def __init__(self, model, saliency_config=None, steps: int = 30, **kwargs):
+    def __init__(self, model, saliency_config=None, steps: int = 30, labels=None, **kwargs):
         super().__init__(model, saliency_config, **kwargs)
         self.steps = steps
+        self.labels = labels or []
 
     def explain(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         sal = self.get_saliency(inputs)
@@ -23,6 +24,7 @@ class DaI(BaseScoreExplainer):
             cam = sal['cam_arrays'][i]
             pred = sal['predictions'][i]
             class_idx = pred['class_idx']
+            pred['label_name'] = self.labels[class_idx]
 
             flat = cam.flatten()
             order = np.argsort(-flat)
@@ -49,10 +51,13 @@ class DaI(BaseScoreExplainer):
             ins_auc = auc(x, ins_scores)
             del_auc = auc(x, del_scores)
             results.append({
+                'id': str(inputs['image_paths'][i]).split('/')[-1].split('.')[0],
                 'score': (ins_auc + (1 - del_auc)) / 2,
                 'insertion_auc': ins_auc,
                 'deletion_auc': del_auc,
                 'prediction': pred,
                 'saliency_image': sal['saliency_images'][i],
             })
-        return {'results': results}
+        
+        # convert list of dict to dict of list and return
+        return {k: [result[k] for result in results] for k in results[0].keys()}

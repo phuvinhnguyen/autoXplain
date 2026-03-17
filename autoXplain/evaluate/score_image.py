@@ -12,7 +12,7 @@ Metrics (aligned with PASTA project evaluation):
 
 from argparse import ArgumentParser
 import json
-import os
+import os, glob
 from typing import Any, Dict, Tuple
 
 import numpy as np
@@ -115,20 +115,21 @@ class ScoreImageEvaluator(BaseEvaluator):
     def evaluate(self, prediction_path: str, reference_path: str) -> Dict[str, Any]:
         with open(reference_path) as f:
             reference = json.load(f)
-        ref_dict = {k: float(v) for k, v in reference.items()}
-
-        summary_path = os.path.join(prediction_path, "summary.json")
-        with open(summary_path) as f:
-            prediction = json.load(f)
+        ref_dict = {os.path.basename(k).split(".")[0]: float(v) for k, v in reference.items()}
 
         pred_dict = {}
-        for item in prediction:
-            img = item.get("image", "")
-            score = item.get("score")
-            if score is None:
-                continue
-            stem = os.path.basename(str(img)).rsplit(".", 1)[0] if "." in os.path.basename(str(img)) else str(img)
-            pred_dict[stem] = float(score)
+        summary_paths = [f for f in glob.glob(os.path.join(prediction_path, '**', 'summary.jsonl'), recursive=True)]
+        for summary_path in summary_paths:
+            with open(summary_path) as f:
+                prediction = [json.loads(line) for line in f]
+
+            for item in prediction:
+                img = item.get("id", "").split(".")[0]
+                score = item.get("score")
+                if score is None:
+                    continue
+                stem = os.path.basename(str(img)).rsplit(".", 1)[0] if "." in os.path.basename(str(img)) else str(img)
+                pred_dict[stem] = float(score)
 
         ref_arr, pred_arr = _align_dicts_simple(ref_dict, pred_dict)
         if len(ref_arr) < 2:

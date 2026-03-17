@@ -1,0 +1,54 @@
+## VLMJudge on PASTA test set (requires VLM server)
+# Uses PASTA-trained ResNet50 per dataset via `pasta_resnet50` model.
+
+explain:
+  name: VLMJudge
+  kwargs:
+    saliency_config:
+      method: CAMSaliency
+      cam: GradCAM
+      layer: 0
+      slope: 25
+      position: 0.4
+    cam_mode: masked
+    threshold: 2.5
+  vlm:
+    client: VLLMClient
+    kwargs:
+      model_name: Qwen/Qwen3-VL-2B-Instruct
+      port: 8000
+
+datasets:
+  - name: ImageProcess
+    ds_name: pasta_test_VLMJudge
+    path: /home/phng1216/Thesis/autoXplain/datasets/annotated/pasta/test_imgs
+    prefix: catsdogscars_
+    model:
+      name: pasta_resnet50
+      dataset: catsdogscars
+
+  - name: ImageProcess
+    ds_name: pasta_test_VLMJudge
+    path: /home/phng1216/Thesis/autoXplain/datasets/annotated/pasta/test_imgs
+    prefix: coco_
+    model:
+      name: pasta_resnet50
+      dataset: coco
+
+  - name: ImageProcess
+    ds_name: pasta_test_VLMJudge
+    path: /home/phng1216/Thesis/autoXplain/datasets/annotated/pasta/test_imgs
+    prefix: monumai_
+    model:
+      name: pasta_resnet50
+      dataset: monumai
+
+  - name: ImageProcess
+    ds_name: pasta_test_VLMJudge
+    path: /home/phng1216/Thesis/autoXplain/datasets/annotated/pasta/test_imgs
+    prefix: pascalpart_
+    model:
+      name: pasta_resnet50
+      dataset: pascalpart
+
+output: /home/phng1216/Thesis/autoXplain/outputs

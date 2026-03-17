@@ -9,9 +9,10 @@ from autoXplain.explain.score.base import score, BaseScoreExplainer
 class AOPC(BaseScoreExplainer):
     """Area Over the Perturbation Curve score (classification only)."""
 
-    def __init__(self, model, saliency_config=None, steps: int = 30, **kwargs):
+    def __init__(self, model, saliency_config=None, steps: int = 30, labels=None, **kwargs):
         super().__init__(model, saliency_config, **kwargs)
         self.steps = steps
+        self.labels = labels or []
 
     def explain(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         sal = self.get_saliency(inputs)
@@ -22,6 +23,7 @@ class AOPC(BaseScoreExplainer):
             cam = sal['cam_arrays'][i]
             pred = sal['predictions'][i]
             class_idx = pred['class_idx']
+            pred['label_name'] = self.labels[class_idx]
 
             with torch.no_grad():
                 full_score = torch.softmax(self.model(img_t), dim=1)[0, class_idx].item()
@@ -44,8 +46,11 @@ class AOPC(BaseScoreExplainer):
 
             aopc = float(np.mean([full_score - s for s in scores]))
             results.append({
+                'id': str(inputs['image_paths'][i]).split('/')[-1].split('.')[0],
                 'score': aopc,
                 'prediction': pred,
                 'saliency_image': sal['saliency_images'][i],
             })
-        return {'results': results}
+        
+        # convert list of dict to dict of list and return
+        return {k: [result[k] for result in results] for k in results[0].keys()}

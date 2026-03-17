@@ -3,6 +3,7 @@ from typing import Dict, Any
 
 from autoXplain.explain.score.base import score, BaseScoreExplainer
 from autoXplain.utils.score import pil_to_tempfile, get_first_number
+from autoXplain.utils.vlm import VLM_REGISTRY
 
 MASKED_CAM_PROMPT = '''\
 Read the masked CAM image and use this tool to evaluate the model's attention mechanism. This task assesses how well the model's attention aligns with its own prediction.
@@ -92,22 +93,28 @@ Rate attention-prediction alignment from 0 to 5:
 - Provide reasoning BEFORE the function call, NOT after.
 '''
 
-
 def _parse_vlm_response(text):
-    pattern = (r'<function>\s*'
-               r'<parameter description>(.*?)</parameter>\s*'
-               r'<parameter justification>(.*?)</parameter>\s*'
-               r'<parameter score>(.*?)</parameter>\s*'
-               r'</function>')
-    match = re.search(pattern, text, re.DOTALL)
-    if match:
-        return {
-            'description': match.group(1).strip(),
-            'justification': match.group(2).strip(),
-            'score': get_first_number(match.group(3).strip()),
-        }
-    return {'description': None, 'justification': None, 'score': None}
+    desc_match = re.search(r'<parameter description>(.*?)</parameter>', text, re.DOTALL)
+    description = desc_match.group(1).strip() if desc_match else None
 
+    just_match = re.search(r'<parameter justification>(.*?)</parameter>', text, re.DOTALL)
+    justification = just_match.group(1).strip() if just_match else None
+
+    score_match = re.search(r'<parameter score>(.*?)</parameter>', text, re.DOTALL)
+    score_val = get_first_number(score_match.group(1).strip()) if score_match else None
+
+    if score_val is None:
+        m = re.search(r'(?:score|rating|rate)[:\s]*(\d)', text, re.IGNORECASE)
+        if m:
+            score_val = int(m.group(1))
+        else:
+            score_val = get_first_number(text)
+
+    return {
+        'description': description,
+        'justification': justification,
+        'score': score_val,
+    }
 
 @score
 class VLMJudge(BaseScoreExplainer):
@@ -120,7 +127,7 @@ class VLMJudge(BaseScoreExplainer):
     def __init__(self, model, saliency_config=None, vlm=None,
                  cam_mode='masked', threshold=2.5, labels=None, **kwargs):
         super().__init__(model, saliency_config, **kwargs)
-        self.vlm = vlm
+        self.vlm = VLM_REGISTRY[vlm['name']](**(vlm.get('kwargs') or {}))
         self.cam_mode = cam_mode
         self.threshold = threshold
         self.labels = labels or []
@@ -143,7 +150,7 @@ class VLMJudge(BaseScoreExplainer):
             queries.append({'image_path': img_path, 'text': prompt})
             meta.append({
                 'pred': pred,
-                'label': path.split('/')[-1].split('_')[-1].split('.')[0],
+                'label': str(path).split('/')[-1].split('_')[-1].split('.')[0],
                 'saliency_image': sal['saliency_images'][i],
                 'masked_image': sal['masked_images'][i],
             })
@@ -155,6 +162,7 @@ class VLMJudge(BaseScoreExplainer):
             parsed = _parse_vlm_response(raw)
             s = parsed['score']
             results.append({
+                'id': str(inputs['image_paths'][i]).split('/')[-1].split('.')[0],
                 'score': s,
                 'description': parsed['description'],
                 'justification': parsed['justification'],
@@ -166,4 +174,6 @@ class VLMJudge(BaseScoreExplainer):
                 'masked_image': meta[i]['masked_image'],
                 'raw_response': raw,
             })
-        return {'results': results}
+        
+        # convert list of dict to dict of list and return
+        return {k: [result[k] for result in results] for k in results[0].keys()}
