@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 from autoXplain.explain.base import BaseExplainer
 from autoXplain.utils.general import build_model, build_explainer
 import os
@@ -22,15 +22,16 @@ class BaseProcess(ABC):
         model_name = '-'.join([str(i) for i in ds_cfg['model'].values()])
         model_info = build_model(ds_cfg.pop('model'))
         exp = build_explainer(explain_cfg, model_info)
+        target = exp.target
         output_path = os.path.join(output_root, ds_name, model_name)
         os.makedirs(output_path, exist_ok=True)
-        return [self.save(i, output_path) for i in self._process(ds_cfg, exp)]
+        return [self.save(i, output_path, target) for i in self._process(ds_cfg, exp)]
 
     @abstractmethod
     def _process(self, ds_cfg, exp: BaseExplainer) -> List[Dict[str, Any]]:  # use yield to return results
         ...
 
-    def save(self, result: Dict[str, Any], output_root: str) -> Dict[str, Any]:
+    def save(self, result: Dict[str, Any], output_root: str, target: str = 'summary') -> Dict[str, Any]:
         def serialize(k, v, index=None):
             if isinstance(v, Image.Image):
                 index = '-' + str(index) if index is not None else ''
@@ -44,8 +45,15 @@ class BaseProcess(ABC):
                 return {nk: serialize(k + '/' + nk, v) for nk, v in v.items()}
             return v
 
-        normal_data = {k: serialize(k, v) for k, v in result.items()}
+        if isinstance(result, Tuple):
+            for index, item in enumerate(result):
+                normal_data = {k: serialize(k, v) for k, v in item.items()}
+                with open(os.path.join(output_root, f'{target[index]}.jsonl'), 'a') as f:
+                    f.write(json.dumps(normal_data) + '\n')
+            return result
+        else:
+            normal_data = {k: serialize(k, v) for k, v in result.items()}
 
-        with open(os.path.join(output_root, 'summary.jsonl'), 'a') as f:
-            f.write(json.dumps(normal_data) + '\n')
-        return result
+            with open(os.path.join(output_root, f'{target}.jsonl'), 'a') as f:
+                f.write(json.dumps(normal_data) + '\n')
+            return result

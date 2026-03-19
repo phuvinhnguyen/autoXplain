@@ -3,6 +3,7 @@ from typing import Any, Dict
 import torch
 
 class BaseExplainer(ABC):
+    target = 'summary'
     def __init__(self, model: torch.nn.Module):
         self.model = model
         self.model.eval()

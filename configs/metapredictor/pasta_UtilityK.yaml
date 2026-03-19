@@ -1,0 +1,70 @@
+## Utility-K aggregation over saved VLMJudge outputs (meta-predictor example)
+
+explain:
+  name: UtilityK
+  kwargs:
+    k: 3
+    n_trials: 2
+    n_query: 20
+    seed: 0
+    # Optional: configure a real VLM here.
+    vlm:
+      name: VLLMClient
+      kwargs:
+        model_name: Qwen/Qwen3-VL-2B-Instruct
+        port: 8000
+
+datasets:
+  - name: MetaProcess
+    ds_name: meta_pasta_VLMJudge
+    # Path to a summary.jsonl produced by a previous explainer run.
+    path: /home/phng1216/Thesis/autoXplain/outputs/pasta_test_VLMJudge
+    targeted_keys:
+      prediction: prediction
+      original_image: original_image
+      explain_text: description
+    model:
+      name: torchvision
+  - name: MetaProcess
+    ds_name: meta_pasta_AOPC
+    # Path to a summary.jsonl produced by a previous explainer run.
+    path: /home/phng1216/Thesis/autoXplain/outputs/pasta_test_AOPC
+    targeted_keys:
+      prediction: prediction
+      original_image: original_image
+      explain_image: saliency_image
+    model:
+      name: torchvision
+  - name: MetaProcess
+    ds_name: meta_pasta_AvgDrop
+    # Path to a summary.jsonl produced by a previous explainer run.
+    path: /home/phng1216/Thesis/autoXplain/outputs/pasta_test_AvgDrop
+    targeted_keys:
+      prediction: prediction
+      original_image: original_image
+      explain_image: saliency_image
+    model:
+      name: torchvision
+  - name: MetaProcess
+    ds_name: meta_pasta_DaI
+    # Path to a summary.jsonl produced by a previous explainer run.
+    path: /home/phng1216/Thesis/autoXplain/outputs/pasta_test_DaI
+    targeted_keys:
+      prediction: prediction
+      original_image: original_image
+      explain_image: saliency_image
+    model:
+      name: torchvision
+  - name: MetaProcess
+    ds_name: meta_pasta_Uncertainty
+    # Path to a summary.jsonl produced by a previous explainer run.
+    path: /home/phng1216/Thesis/autoXplain/outputs/pasta_test_Uncertainty
+    targeted_keys:
+      prediction: prediction
+      original_image: original_image
+      explain_image: saliency_image
+    model:
+      name: torchvision
+
+output: /home/phng1216/Thesis/autoXplain/outputs/UtilityK
+

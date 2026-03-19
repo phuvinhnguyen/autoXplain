@@ -12,11 +12,11 @@ explain:
       position: 0.4
     cam_mode: masked
     threshold: 2.5
-  vlm:
-    client: VLLMClient
-    kwargs:
-      model_name: Qwen/Qwen3-VL-2B-Instruct
-      port: 8000
+    vlm:
+      name: VLLMClient
+      kwargs:
+        model_name: Qwen/Qwen3-VL-2B-Instruct
+        port: 8000
 
 datasets:
   - name: ImageProcess
