@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from torchcam.methods import (
     GradCAM, SmoothGradCAMpp, GradCAMpp,
@@ -38,11 +38,11 @@ class CAMSaliency(BaseExplainer):
 
     Output dict keys:
         saliency_images, masked_images, heatmaps, original_images,
-        predictions, img_tensors, outputs, cam_arrays
+        prediction, img_tensors, outputs, cam_arrays
     """
 
     def __init__(self, model, cam: str = 'GradCAM', layer: int = 0,
-                 model_type: str = 'classification',
+                 model_type: str = 'classification', labels: List[str] = None,
                  slope: float = 25, position: float = 0.4, **kwargs):
         super().__init__(model)
         key = cam.lower()
@@ -53,11 +53,13 @@ class CAMSaliency(BaseExplainer):
         self.model_type = model_type
         self.slope = slope
         self.position = position
+        self.labels = labels
 
     def explain(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         out = {
+            'id': [],
             'saliency_images': [], 'masked_images': [], 'heatmaps': [],
-            'original_images': [], 'predictions': [],
+            'original_images': [], 'prediction': [],
             'img_tensors': [], 'outputs': [], 'cam_arrays': [],
         }
         for path in inputs['image_paths']:
@@ -67,12 +69,16 @@ class CAMSaliency(BaseExplainer):
                 slope=self.slope, position=self.position,
             )
             r['id'] = str(path).split('/')[-1].split('.')[0]
+            out['id'].append(r['id'])
             out['saliency_images'].append(r['cam_image'])
             out['masked_images'].append(r['masked_image'])
             out['heatmaps'].append(r['heatmap'])
             out['original_images'].append(r['original_image'])
-            out['predictions'].append(r['pred_info'])
+            out['prediction'].append(r['pred_info'])
             out['img_tensors'].append(r['img_tensor'])
             out['outputs'].append(r['output'])
             out['cam_arrays'].append(r['cam_array'])
+            if self.labels:
+                out['prediction'][-1]['top_labels'] = [self.labels[i] for i in r['pred_info']['top_predictions']]
+                out['prediction'][-1]['predicted_label'] = self.labels[r['pred_info']['class_idx']]
         return out

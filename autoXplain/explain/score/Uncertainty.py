@@ -22,7 +22,7 @@ class Uncertainty(BaseScoreExplainer):
         results = []
 
         for i, path in enumerate(inputs['image_paths']):
-            pred = sal['predictions'][i]
+            pred = sal['prediction'][i]
             pred_prob = pred['confidence']
             pred['label_name'] = self.labels[pred['class_idx']]
 

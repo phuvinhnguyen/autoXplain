@@ -1,0 +1,18 @@
+## CAMSaliency (ScoreCAM) on COCO mini-train-10k
+
+explain:
+  name: CAMSaliency
+  kwargs:
+    cam: ScoreCAM
+    layer: 0
+    slope: 25
+    position: 0.4
+
+datasets:
+  - name: ImageProcess
+    ds_name: coco_CAM_ScoreCAM
+    path: /home/phng1216/Thesis/autoXplain/datasets/annotated/coco/coco_minitrain_10k/images/test
+    model:
+      name: torchvision
+
+output: /home/phng1216/Thesis/autoXplain/outputs/coco

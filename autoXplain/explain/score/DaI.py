@@ -22,7 +22,7 @@ class DaI(BaseScoreExplainer):
         for i in range(len(sal['img_tensors'])):
             img_t = sal['img_tensors'][i].to(self.device)
             cam = sal['cam_arrays'][i]
-            pred = sal['predictions'][i]
+            pred = sal['prediction'][i]
             class_idx = pred['class_idx']
             pred['label_name'] = self.labels[class_idx]
 

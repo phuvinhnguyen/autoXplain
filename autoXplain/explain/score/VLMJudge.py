@@ -139,7 +139,7 @@ class VLMJudge(BaseScoreExplainer):
         meta = []
 
         for i, path in enumerate(inputs['image_paths']):
-            pred = sal['predictions'][i]
+            pred = sal['prediction'][i]
             class_idx = pred['class_idx']
             label = self.labels[class_idx] if self.labels else str(class_idx)
             pred['label_name'] = label
@@ -153,6 +153,8 @@ class VLMJudge(BaseScoreExplainer):
                 'label': str(path).split('/')[-1].split('_')[-1].split('.')[0],
                 'saliency_image': sal['saliency_images'][i],
                 'masked_image': sal['masked_images'][i],
+                'top_labels': sal['prediction'][i]['top_labels'],
+                'predicted_label': sal['prediction'][i]['predicted_label'],
             })
 
         responses = self.vlm.query_batch(queries, max_tokens=1024)

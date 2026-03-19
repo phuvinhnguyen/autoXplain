@@ -128,6 +128,7 @@ def _pred_classification(output, class_id):
         'class_idx': idx,
         'confidence': probs[idx].item(),
         '_cam_output': output,
+        'top_predictions': probs.topk(min(20, len(probs))).indices.tolist()
     }
 
 
@@ -150,6 +151,7 @@ def _pred_segmentation(output, class_id, orig_size, img):
         'segment_mask': seg_out,
         'segment_overlay': overlay,
         '_cam_output': scores,
+        'top_predictions': probs.topk(min(20, len(probs))).indices.tolist()
     }
 
 
@@ -185,6 +187,7 @@ def _pred_detection(wrapper, output, class_id):
         'box': boxes[pick].tolist(),
         'boxes': all_boxes,
         '_cam_output': output,
+        'top_predictions': scores.topk(min(20, len(scores))).indices.tolist()
     }
 
 

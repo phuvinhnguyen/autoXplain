@@ -1,0 +1,27 @@
+## VLMJudge on COCO mini-train-10k (requires VLM server)
+
+explain:
+  name: VLMJudge
+  kwargs:
+    saliency_config:
+      method: CAMSaliency
+      cam: GradCAM
+      layer: 0
+      slope: 25
+      position: 0.4
+    cam_mode: langxai
+    threshold: 2.5
+    vlm:
+      name: VLLMClient
+      kwargs:
+        model_name: Qwen/Qwen3-VL-2B-Instruct
+        port: 8000
+
+datasets:
+  - name: ImageProcess
+    ds_name: coco_LangXAI
+    path: /home/phng1216/Thesis/autoXplain/datasets/annotated/coco/coco_minitrain_10k/images/test
+    model:
+      name: torchvision
+
+output: /home/phng1216/Thesis/autoXplain/outputs/coco

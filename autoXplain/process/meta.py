@@ -18,6 +18,7 @@ class MetaProcess(BaseProcess):
         items = [] # list of dicts
         targeted_keys = ds_cfg.get('targeted_keys', {})
         for summary_path in summary_paths:
+            print(summary_path)
             with open(summary_path) as f:
                 items.extend([json.loads(line) for line in f])
 
@@ -36,9 +37,13 @@ class MetaProcess(BaseProcess):
             outputs = []
             for o in out:
                 # Check equal length of keys (List)
-                if np.std([len(v) if isinstance(v, list) else -1 for v in o.values()] != [len(o)]) == 0:
-                    outputs.append([dict(zip(o.keys(), result)) for result in zip(*o.values())])
-                else:
+                size = [len(i) if isinstance(i, list) else i for i in o.values()]
+                try:
+                    if all(s == size[0] for s in size[1:]):
+                        outputs.append([dict(zip(o.keys(), result)) for result in zip(*o.values())])
+                    else:
+                        outputs.append(o)
+                except:
                     outputs.append(o)
             return tuple(outputs)
         else:
