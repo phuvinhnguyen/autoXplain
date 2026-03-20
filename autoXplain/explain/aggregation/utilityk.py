@@ -152,7 +152,8 @@ You are provided with:
 1. An explanation visualization (e.g., heatmap, attribution map) showing where the classifier focuses
 2. A textual explanation describing the reasoning process
 
-Textual explanation: "{explain_text}"
+Textual explanation:
+{explain_text}
 
 Task: Analyze both the visual explanation map and the textual description to understand how the classifier makes decisions, then predict which label the classifier will assign to the original image.
 
@@ -227,17 +228,26 @@ class UtilityK(BaseAggregationExplainer):
         prompts_explanation = []
         model_predictions = []
         existing_labels = set()
-        for inp in list_inputs: existing_labels.add(inp['prediction']['label_name'])
+        for inp in list_inputs:
+            if 'predicted_label' in inp['prediction']:
+                existing_labels.add(inp['prediction']['predicted_label'])
+            else:
+                existing_labels.add(inp['prediction']['class_idx'])
         labels = list(existing_labels)
-        # ['pottedplant', 'tvmonitor', 'sheep', 'bicycle', 'bird', 'train', 'cat', 'aeroplane', 'Baroque', 'Renaissance', 'person', 'horse', 'bottle', 'Hispanic-Muslim', 'dog', 'cats', 'bus', 'cultural', 'home_or_hotel', 'cars', 'Gothic', 'cow', 'workplace', 'dogs', 'motorbike', 'car', 'shopping_and_dining', 'sports_and_leisure', 'transportation']
 
         for input in list_inputs:
             if 'top_labels' in input['prediction']:
                 local_labels = input['prediction']['top_labels'][:20]
+            elif 'top_predictions' in input['prediction']:
+                local_labels = [self.labels[i] for i in input['prediction']['top_predictions'][:20]]
             else:
                 local_labels = labels
 
-            model_predictions.append(input.pop('prediction')['label_name'])
+            prediction = input.pop('prediction')
+            if 'predicted_label' in prediction:
+                model_predictions.append(prediction['predicted_label'])
+            else:
+                model_predictions.append(self.labels[prediction['class_idx']])
             raw_prompt = fn_raw_prediction(is_prompt=True)(**input, labels=local_labels)
             explain_prompt = fn_explain_prediction(is_prompt=True)(**input, labels=local_labels)
             prompts_raw_input.append(raw_prompt)
@@ -254,6 +264,8 @@ class UtilityK(BaseAggregationExplainer):
 
         return inputs, {
             "model_predictions": model_predictions,
+            "vlm_raw_output": outputs[:len(prompts_raw_input)],
+            "vlm_explanation_output": outputs[len(prompts_raw_input):],
             "vlm_raw_prediction": vlm_raw_prediction,
             "vlm_explanation_prediction": vlm_explanation_prediction,
             'accurate_raw_prediction': accurate_raw_prediction,

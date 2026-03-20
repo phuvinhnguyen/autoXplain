@@ -21,7 +21,7 @@ class AverageDrop(BaseScoreExplainer):
             cam = sal['cam_arrays'][i]
             pred = sal['prediction'][i]
             class_idx = pred['class_idx']
-            pred['label_name'] = self.labels[class_idx]
+            pred['predicted_label'] = self.labels[class_idx]
 
             with torch.no_grad():
                 full_score = torch.softmax(self.model(img_t), dim=1)[0, class_idx].item()
@@ -39,6 +39,7 @@ class AverageDrop(BaseScoreExplainer):
                 'masked_confidence': masked_score,
                 'prediction': pred,
                 'saliency_image': sal['saliency_images'][i],
+                'original_image': inputs['image_paths'][i],
             })
         
         # convert list of dict to dict of list and return

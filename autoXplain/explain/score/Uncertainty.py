@@ -24,7 +24,7 @@ class Uncertainty(BaseScoreExplainer):
         for i, path in enumerate(inputs['image_paths']):
             pred = sal['prediction'][i]
             pred_prob = pred['confidence']
-            pred['label_name'] = self.labels[pred['class_idx']]
+            pred['predicted_label'] = self.labels[pred['class_idx']]
 
             label = str(path).split('/')[-1].split('_')[-1].split('.')[0]
             true_prob = None
@@ -40,6 +40,7 @@ class Uncertainty(BaseScoreExplainer):
                 'true_prob': true_prob,
                 'prediction': pred,
                 'saliency_image': sal['saliency_images'][i],
+                'original_image': inputs['image_paths'][i],
             })
         
         # convert list of dict to dict of list and return

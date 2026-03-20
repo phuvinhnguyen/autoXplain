@@ -1,0 +1,41 @@
+## Utility-K aggregation over COCO CAM/VLMJudge outputs
+
+explain:
+  name: UtilityK
+  kwargs:
+    k: 3
+    n_trials: 2
+    n_query: 20
+    seed: 0
+    # Optional: configure a real VLM here.
+    vlm:
+      name: VLLMClient
+      kwargs:
+        model_name: Qwen/Qwen3-VL-2B-Instruct
+        port: 8000
+
+datasets:
+  - name: MetaProcess
+    ds_name: meta_coco_VLMJudge
+    path: /home/phng1216/Thesis/autoXplain/outputs/coco/coco_VLMJudge
+    targeted_keys:
+      prediction: prediction
+      original_image: original_image
+      explain_image: masked_image
+      explain_text: description
+    model:
+      name: torchvision
+  
+  - name: MetaProcess
+    ds_name: meta_coco_LangXAI
+    path: /home/phng1216/Thesis/autoXplain/outputs/coco/coco_LangXAI
+    targeted_keys:
+      prediction: prediction
+      original_image: original_image
+      explain_image: saliency_image
+      explain_text: description
+    model:
+      name: torchvision
+
+output: /home/phng1216/Thesis/autoXplain/outputs/coco/
+

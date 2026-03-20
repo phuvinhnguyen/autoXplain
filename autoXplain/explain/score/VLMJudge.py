@@ -14,6 +14,7 @@ Your task: Determine whether the visible regions actually contain evidence for "
 
 <function>
 <parameter description>
+Answer the following questions:
 - Describe what is actually visible in the masked image (objects, shapes, colors, textures).
 - Is "{object}" present in the visible regions? (not at all / partially / fully)
 - Which parts of "{object}" can be seen, if any?
@@ -59,6 +60,7 @@ Evaluate whether the warm-colored regions (high attention) actually correspond t
 
 <function>
 <parameter description>
+Answer the following questions:
 - What regions show warm colors (high attention)? Describe their location, shape, and extent.
 - Is "{object}" located within these warm-colored regions? (not at all / partially / fully)
 - Which parts of "{object}" are covered by warm colors, if any?
@@ -153,8 +155,8 @@ class VLMJudge(BaseScoreExplainer):
                 'label': str(path).split('/')[-1].split('_')[-1].split('.')[0],
                 'saliency_image': sal['saliency_images'][i],
                 'masked_image': sal['masked_images'][i],
-                'top_labels': sal['prediction'][i]['top_labels'],
-                'predicted_label': sal['prediction'][i]['predicted_label'],
+                'top_labels': [self.labels[i] for i in sal['prediction'][i]['top_predictions'][:20]],
+                'predicted_label': self.labels[sal['prediction'][i]['class_idx']],
             })
 
         responses = self.vlm.query_batch(queries, max_tokens=1024)
@@ -174,6 +176,7 @@ class VLMJudge(BaseScoreExplainer):
                 'label': meta[i]['label'],
                 'saliency_image': meta[i]['saliency_image'],
                 'masked_image': meta[i]['masked_image'],
+                'original_image': inputs['image_paths'][i],
                 'raw_response': raw,
             })
         

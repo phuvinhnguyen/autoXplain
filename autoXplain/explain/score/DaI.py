@@ -24,7 +24,7 @@ class DaI(BaseScoreExplainer):
             cam = sal['cam_arrays'][i]
             pred = sal['prediction'][i]
             class_idx = pred['class_idx']
-            pred['label_name'] = self.labels[class_idx]
+            pred['predicted_label'] = self.labels[class_idx]
 
             flat = cam.flatten()
             order = np.argsort(-flat)
@@ -57,6 +57,7 @@ class DaI(BaseScoreExplainer):
                 'deletion_auc': del_auc,
                 'prediction': pred,
                 'saliency_image': sal['saliency_images'][i],
+                'original_image': inputs['image_paths'][i],
             })
         
         # convert list of dict to dict of list and return

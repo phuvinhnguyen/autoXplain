@@ -79,6 +79,6 @@ class CAMSaliency(BaseExplainer):
             out['outputs'].append(r['output'])
             out['cam_arrays'].append(r['cam_array'])
             if self.labels:
-                out['prediction'][-1]['top_labels'] = [self.labels[i] for i in r['pred_info']['top_predictions']]
+                out['prediction'][-1]['top_labels'] = [self.labels[i] for i in r['pred_info']['top_predictions'][:20]]
                 out['prediction'][-1]['predicted_label'] = self.labels[r['pred_info']['class_idx']]
         return out

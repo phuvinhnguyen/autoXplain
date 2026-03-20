@@ -227,8 +227,12 @@ def generate_cam(image, model, cam_class, layer=0, class_id=None,
     if model_type == 'detection':
         wrapped.run_detection(img_tensor.detach())
 
-    target_layer = (locate_linear_layer(wrapped, index=layer)[0] if cam_class == CAMMethod
-                    else locate_candidate_layer(wrapped, index=layer)[0])
+    # Old code:
+    # target_layer = (locate_linear_layer(wrapped, index=layer)[0] if cam_class == CAMMethod
+    #                 else locate_candidate_layer(wrapped, index=layer)[0])
+    # Use feature map layers for CAM extraction. Using a linear layer here can
+    # cause channel-size mismatches (e.g., 512 vs 1000) for CAMMethod.
+    target_layer = locate_candidate_layer(wrapped, index=layer)[0]
     extractor = cam_class(wrapped, target_layer)
 
     output = wrapped(img_tensor)
