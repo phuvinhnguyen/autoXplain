@@ -14,7 +14,7 @@ Your task: Determine whether the visible regions actually contain evidence for "
 
 <function>
 <parameter description>
-Answer the following questions:
+Generate a short description to answer the following questions:
 - Describe what is actually visible in the masked image (objects, shapes, colors, textures).
 - Is "{object}" present in the visible regions? (not at all / partially / fully)
 - Which parts of "{object}" can be seen, if any?
@@ -60,8 +60,8 @@ Evaluate whether the warm-colored regions (high attention) actually correspond t
 
 <function>
 <parameter description>
-Answer the following questions:
-- What regions show warm colors (high attention)? Describe their location, shape, and extent.
+Generate a short description to answer the following questions:
+- Describe in details the regions show warm colors (high attention)? Describe their location, shape, and extent.
 - Is "{object}" located within these warm-colored regions? (not at all / partially / fully)
 - Which parts of "{object}" are covered by warm colors, if any?
 - Are there warm-colored regions that do NOT correspond to "{object}"? If so, what are they?
