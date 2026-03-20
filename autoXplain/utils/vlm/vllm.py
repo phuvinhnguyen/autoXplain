@@ -76,6 +76,8 @@ class VLLMClient(VLMBase):
         raise RuntimeError("vLLM server startup timeout")
 
     def _encode_image(self, path: str) -> str:
+        # Accept pathlib.Path / os.PathLike (summary may still pass Path in-memory).
+        path = os.fspath(path)
         if path.startswith(('http://', 'https://')):
             return path
         with open(path, "rb") as f:

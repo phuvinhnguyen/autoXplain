@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple
+from pathlib import Path
 from autoXplain.explain.base import BaseExplainer
 from autoXplain.utils.general import build_model, build_explainer
 import os
@@ -60,6 +61,10 @@ class BaseProcess(ABC):
                 return path
             elif isinstance(v, list):
                 return [serialize(k, i, index) for index, i in enumerate(v)]
+            elif isinstance(v, Path):
+                # Paths must become strings; otherwise serialize falls through and
+                # writes 'data type ... not supported', which breaks downstream VLM open().
+                return os.fspath(v)
             elif isinstance(v, (int, float, bool, type(None), str)):
                 return v
             elif isinstance(v, tuple):

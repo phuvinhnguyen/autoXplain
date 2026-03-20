@@ -1,3 +1,13 @@
+'''
+This only work if the output folder contains
+- summary.jsonl
+    - prediction
+        - top_predictions
+        - top_labels (Optional)
+        - class_idx
+        - predicted_label (Optional)
+'''
+
 from typing import Any, Dict, List, Optional
 from PIL import Image
 
