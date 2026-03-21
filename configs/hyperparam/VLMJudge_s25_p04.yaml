@@ -1,11 +1,11 @@
-## VLMJudge on COCO mini-train-10k (requires VLM server)
+## Hyperparameter sweep config: VLMJudge (slope=25, position=0.4)
 
 explain:
   name: VLMJudge
   kwargs:
     saliency_config:
       method: CAMSaliency
-      cam: XGradCAM
+      cam: GradCAM
       layer: 0
       slope: 25
       position: 0.4
@@ -19,9 +19,9 @@ explain:
 
 datasets:
   - name: ImageProcess
-    ds_name: coco_VLMJudge
-    path: /home/phng1216/Thesis/autoXplain/datasets/annotated/coco/coco_minitrain_10k/images/test
+    ds_name: hyperparam_VLMJudge_s25_p04
+    path: /home/phng1216/Thesis/autoXplain/datasets/annotated/explanation_maskedcam_gemini25flashlite_resnet18/original
     model:
       name: torchvision
 
-output: /home/phng1216/Thesis/autoXplain/outputs/coco
+output: /home/phng1216/Thesis/autoXplain/outputs/hyperparam_resnet18

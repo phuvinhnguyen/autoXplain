@@ -24,6 +24,10 @@ def parser(text: str) -> Optional[str]:
     if match: return match.group(1).strip()
     return 'None'
 
+
+# When hide_labels is on, explanations can be long; a tiny cap hurts fusion of heatmap + text.
+UTILITYK_EXPLAIN_TEXT_MAX_CHARS = 4096
+
 # ============================================
 # 1. PREDICT FROM ORIGINAL IMAGE (chỉ có ảnh gốc)
 # ============================================
@@ -120,8 +124,12 @@ Important: Only output the XML tag with the exact label from the available label
 # ============================================
 
 def predict_from_explanation_text(is_prompt: bool = True) -> Callable:
-    def prompt(explain_text: str, labels: List[str], **kwargs) -> Dict:
+    def prompt(explain_text: str, labels: List[str], hide_labels: bool = False, **kwargs) -> Dict:
         labels_str = ", ".join([f'"{label}"' for label in labels])
+        if hide_labels and isinstance(explain_text, str):
+            for i in labels:
+                explain_text = explain_text.replace(i, "***")
+
         prompt_text = f"""You are a meta-predictor trying to predict how a black-box classifier will label an image based on a textual explanation of its decision process.
 
 You are provided with:
@@ -154,27 +162,48 @@ Important: Only output the XML tag with the exact label from the available label
 # ============================================
 
 def predict_from_explanation_image_and_text(is_prompt: bool = True) -> Callable:
-    def prompt(explain_image: str, explain_text: str, labels: List[str], **kwargs) -> Dict:
+    def prompt(explain_image: str, explain_text: str, labels: List[str], hide_labels: bool = False, **kwargs) -> Dict:
         labels_str = ", ".join([f'"{label}"' for label in labels])
-        prompt_text = f"""You are a meta-predictor trying to predict how a black-box classifier will label an image based on both visual and textual explanations.
+        hiding_text = ''
+        if hide_labels and isinstance(explain_text, str):
+            for i in labels:
+                explain_text = explain_text.replace(i, "***")
+            if len(explain_text) > UTILITYK_EXPLAIN_TEXT_MAX_CHARS:
+                explain_text = explain_text[:UTILITYK_EXPLAIN_TEXT_MAX_CHARS].rsplit(" ", 1)[0] + " …"
+            hiding_text = (
+                "**Label names may be redacted in the text as *** . "
+                "Infer the class from BOTH the heatmap (what is attended) and the remaining words, "
+                "then pick exactly one label from the list below.**"
+            )
+        elif isinstance(explain_text, str) and len(explain_text) > UTILITYK_EXPLAIN_TEXT_MAX_CHARS:
+            explain_text = explain_text[:UTILITYK_EXPLAIN_TEXT_MAX_CHARS].rsplit(" ", 1)[0] + " …"
 
-You are provided with:
-1. An explanation visualization (e.g., heatmap, attribution map) showing where the classifier focuses
-2. A textual explanation describing the reasoning process
+        prompt_text = f"""You are a meta-predictor. Your job is to predict which label a fixed black-box image classifier assigns to the original input image.
 
-Textual explanation:
+## Multimodal inputs (you MUST use BOTH — do not ignore either)
+1. **IMAGE (attached)**: An explanation visualization (saliency / Grad-CAM–style heatmap overlaid on the image).
+   - Warm / hot colors (red, orange, yellow) = regions the classifier weighted heavily.
+   - Cool / dark regions = low importance.
+   - Use this to see *which object or part of the scene* the model treated as evidence.
+2. **TEXT (below)**: A written explanation of the classifier's reasoning (description or justification).
+   - Use this for object identity, attributes, and causal language when present.
+{hiding_text}
+
+### Textual explanation
 {explain_text}
 
-Task: Analyze both the visual explanation map and the textual description to understand how the classifier makes decisions, then predict which label the classifier will assign to the original image.
+## Task
+Combine the heatmap (where attention falls) with the text (what the model claims) to infer the classifier's final class choice among the candidates.
 
-Available labels: [{labels_str}]
+**Fusion rule**: If text and heatmap seem to point to different things, prefer the interpretation that is best supported by *both* modalities together and that matches exactly one string in the label list.
 
-The visual explanation shows which regions are important, while the text explains why. Combine both sources of information to predict the classifier's output.
+Available labels (choose exactly one, copy spelling): [{labels_str}]
 
-Provide your prediction in the following XML format:
+## Output (required)
+Provide your prediction in this exact XML form and nothing else:
 <prediction>your predicted label</prediction>
 
-Important: Only output the XML tag with the exact label from the available labels list. Do not add any explanation."""
+The string inside <prediction> must be identical to one label from the list (same spelling and spacing). No other text before or after the XML."""
 
         return {"image_path": explain_image, "text": prompt_text}
 
@@ -194,6 +223,7 @@ class UtilityK(BaseAggregationExplainer):
         seed: int = 0,
         temperature: float = 0.0,
         max_tokens: int = 32,
+        hide_labels: bool = False,
         **kwargs,
     ):
         # We keep the BaseExplainer signature (expects a `model`) but this
@@ -209,6 +239,7 @@ class UtilityK(BaseAggregationExplainer):
         self.seed = int(seed)
         self.temperature = float(temperature)
         self.max_tokens = int(max_tokens)
+        self.hide_labels = hide_labels
 
     def explain(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         # convert dict of list to list of dict
@@ -259,7 +290,7 @@ class UtilityK(BaseAggregationExplainer):
             else:
                 model_predictions.append(self.labels[prediction['class_idx']])
             raw_prompt = fn_raw_prediction(is_prompt=True)(**input, labels=local_labels)
-            explain_prompt = fn_explain_prediction(is_prompt=True)(**input, labels=local_labels)
+            explain_prompt = fn_explain_prediction(is_prompt=True)(**input, labels=local_labels, hide_labels=self.hide_labels)
             prompts_raw_input.append(raw_prompt)
             prompts_explanation.append(explain_prompt)
 
