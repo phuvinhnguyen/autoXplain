@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""docretrieve — retrieve documents semantically relevant to a query.
+
+Recursively scans a folder, reads supported file types, embeds them with a
+sentence-transformers model, and returns the top-k most similar chunks.
+
+Supported file types: .txt  .md  .py  .json  .yaml  .yml  .rst  .csv  .log
+                      .pdf  (via pdfminer.six or markitdown)
+
+Required packages: sentence-transformers, numpy
+Optional packages: markitdown or pdfminer.six (for PDF support)
+"""
+
+DESC = (
+    "Retrieve documents semantically similar to a query using text embeddings. "
+    "Usage: docretrieve <query> [--folder PATH] [--top-k N] [--model MODEL] "
+    "[--chunk-size N] [--ext EXT [EXT ...]] [--show-content]  "
+    "Options: --folder (default: .), --top-k N (default 5), "
+    "--model sentence-transformers model name (default: all-MiniLM-L6-v2), "
+    "--chunk-size N chars per chunk (default: 1000), "
+    "--show-content (print matched chunk text)"
+)
+
+import sys
+
+if "--desc" in sys.argv:
+    print(DESC)
+    sys.exit(0)
+
+import argparse
+import os
+import re
+import textwrap
+
+# ---------------------------------------------------------------------------
+# File readers
+# ---------------------------------------------------------------------------
+
+TEXT_EXTENSIONS = {".txt", ".md", ".py", ".json", ".yaml", ".yml",
+                   ".rst", ".csv", ".log", ".toml", ".cfg", ".ini",
+                   ".js", ".ts", ".html", ".xml", ".sh"}
+
+
+def _read_text_file(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except Exception as e:
+        return ""
+
+
+def _read_pdf(path: str) -> str:
+    # Try markitdown first
+    try:
+        from markitdown import MarkItDown
+        md = MarkItDown()
+        result = md.convert(path)
+        return result.text_content.strip()
+    except Exception:
+        pass
+
+    # Fallback: pdfminer.six
+    try:
+        from pdfminer.high_level import extract_text
+        return extract_text(path).strip()
+    except Exception:
+        return ""
+
+
+def _read_file(path: str) -> str:
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".pdf":
+        return _read_pdf(path)
+    if ext in TEXT_EXTENSIONS:
+        return _read_text_file(path)
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# Chunking
+# ---------------------------------------------------------------------------
+
+def _chunk_text(text: str, chunk_size: int) -> list:
+    """Split text into overlapping chunks (50 % overlap) for better recall."""
+    if not text.strip():
+        return []
+    step = max(1, chunk_size // 2)
+    return [text[i: i + chunk_size] for i in range(0, len(text), step)
+            if text[i: i + chunk_size].strip()]
+
+
+# ---------------------------------------------------------------------------
+# Retrieval
+# ---------------------------------------------------------------------------
+
+def _load_model(model_name: str):
+    try:
+        from sentence_transformers import SentenceTransformer
+        return SentenceTransformer(model_name)
+    except ImportError:
+        print("Error: sentence-transformers not installed. "
+              "Run: pip install sentence-transformers", file=sys.stderr)
+        sys.exit(1)
+
+
+def _cosine_sim(a, b):
+    import numpy as np
+    a = a / (np.linalg.norm(a) + 1e-9)
+    b = b / (np.linalg.norm(b, axis=1, keepdims=True) + 1e-9)
+    return (b @ a).flatten()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Retrieve semantically relevant documents from a folder."
+    )
+    parser.add_argument("query", nargs="+", help="Query text")
+    parser.add_argument("--folder", default=".", metavar="PATH",
+                        help="Folder to search (default: current directory)")
+    parser.add_argument("--top-k", type=int, default=5, metavar="N",
+                        help="Number of results to return (default: 5)")
+    parser.add_argument("--model", default="all-MiniLM-L6-v2", metavar="MODEL",
+                        help="sentence-transformers model name (default: all-MiniLM-L6-v2)")
+    parser.add_argument("--chunk-size", type=int, default=1000, metavar="N",
+                        help="Characters per document chunk (default: 1000)")
+    parser.add_argument("--ext", nargs="+", metavar="EXT",
+                        help="Restrict to these file extensions, e.g. --ext .py .md")
+    parser.add_argument("--show-content", action="store_true",
+                        help="Print the matched chunk text in results")
+    args = parser.parse_args()
+
+    query     = " ".join(args.query)
+    folder    = os.path.abspath(args.folder)
+    allowed   = {e if e.startswith(".") else f".{e}" for e in args.ext} if args.ext else None
+
+    if not os.path.isdir(folder):
+        print(f"Error: folder not found: {folder}", file=sys.stderr)
+        sys.exit(1)
+
+    # --- Collect all document chunks ---
+    records = []  # (file_path, chunk_index, chunk_text)
+    for root, _, files in os.walk(folder):
+        for fname in sorted(files):
+            fpath = os.path.join(root, fname)
+            ext   = os.path.splitext(fname)[1].lower()
+
+            if allowed is not None and ext not in allowed:
+                continue
+            if ext not in TEXT_EXTENSIONS and ext != ".pdf":
+                continue
+
+            content = _read_file(fpath)
+            if not content.strip():
+                continue
+
+            rel_path = os.path.relpath(fpath, folder)
+            for i, chunk in enumerate(_chunk_text(content, args.chunk_size)):
+                records.append((rel_path, i, chunk))
+
+    if not records:
+        print(f"No readable documents found in: {folder}")
+        sys.exit(0)
+
+    print(f"Indexing {len(records)} chunks from {len({r[0] for r in records})} files…",
+          file=sys.stderr)
+
+    # --- Embed ---
+    import numpy as np
+    model = _load_model(args.model)
+
+    texts = [r[2] for r in records]
+    chunk_embeddings = model.encode(texts, batch_size=64, show_progress_bar=False,
+                                    convert_to_numpy=True)
+    query_embedding  = model.encode([query], convert_to_numpy=True)[0]
+
+    # --- Score and rank ---
+    scores = _cosine_sim(query_embedding, chunk_embeddings)
+    top_indices = scores.argsort()[::-1]
+
+    # Deduplicate: keep highest-scoring chunk per file
+    seen_files = {}
+    ranked = []
+    for idx in top_indices:
+        rel_path, chunk_idx, chunk_text = records[idx]
+        if rel_path not in seen_files:
+            seen_files[rel_path] = True
+            ranked.append((float(scores[idx]), rel_path, chunk_idx, chunk_text))
+        if len(ranked) >= args.top_k:
+            break
+
+    # --- Output ---
+    print(f"\n# Document Retrieval Results\nQuery: {query}\n")
+    for rank, (score, rel_path, chunk_idx, chunk_text) in enumerate(ranked, 1):
+        full_path = os.path.join(folder, rel_path)
+        print(f"## [{rank}] {rel_path}  (score: {score:.4f})")
+        print(f"Path: {full_path}")
+        print(f"Chunk: {chunk_idx}")
+        if args.show_content:
+            preview = textwrap.indent(
+                textwrap.fill(chunk_text.replace("\n", " "), width=100),
+                prefix="  "
+            )
+            print(f"\n{preview}")
+        print()
+
+
+if __name__ == "__main__":
+    main()

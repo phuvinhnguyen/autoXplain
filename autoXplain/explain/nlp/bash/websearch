@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""websearch — search the web and return results as markdown text.
+
+Required packages: duckduckgo-search, markitdown, requests, beautifulsoup4
+"""
+
+DESC = (
+    "Search the web for a query; returns titles, URLs and snippets. "
+    "Usage: websearch <query> [--max-results N] [--fetch]  "
+    "Options: --max-results N (default 5), --fetch (also download + convert each page)"
+)
+
+import sys
+
+if "--desc" in sys.argv:
+    print(DESC)
+    sys.exit(0)
+
+import argparse
+import textwrap
+
+
+def _fetch_as_markdown(url: str) -> str:
+    """Fetch a URL and convert its content to markdown text."""
+    try:
+        from markitdown import MarkItDown
+        md = MarkItDown()
+        result = md.convert(url)
+        return result.text_content.strip()
+    except Exception:
+        pass  # fall back to plain HTML strip
+
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer"]):
+            tag.decompose()
+        return soup.get_text(separator="\n", strip=True)
+    except Exception as e:
+        return f"(fetch failed: {e})"
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Search the web and return results as markdown text."
+    )
+    parser.add_argument("query", nargs="+", help="Search query")
+    parser.add_argument("--max-results", type=int, default=5, metavar="N",
+                        help="Number of results to return (default: 5)")
+    parser.add_argument("--fetch", action="store_true",
+                        help="Fetch and convert each result page to markdown")
+    args = parser.parse_args()
+
+    query = " ".join(args.query)
+
+    try:
+        from duckduckgo_search import DDGS
+    except ImportError:
+        print("Error: duckduckgo_search not installed. Run: pip install duckduckgo-search",
+              file=sys.stderr)
+        sys.exit(1)
+
+    results = []
+    try:
+        with DDGS() as ddgs:
+            for r in ddgs.text(query, max_results=args.max_results):
+                results.append(r)
+    except Exception as e:
+        print(f"Search error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not results:
+        print("No results found.")
+        sys.exit(0)
+
+    lines = [f"# Web Search: {query}\n"]
+    for i, r in enumerate(results, 1):
+        title = r.get("title", "No title")
+        url   = r.get("href", "")
+        body  = textwrap.fill(r.get("body", ""), width=100)
+        lines.append(f"## [{i}] {title}")
+        lines.append(f"URL: {url}")
+        lines.append(body)
+
+        if args.fetch and url:
+            content = _fetch_as_markdown(url)
+            # Limit per-page content to avoid flooding the context
+            if len(content) > 4000:
+                content = content[:4000] + "\n... (truncated)"
+            lines.append("\n### Page content:\n" + content)
+
+        lines.append("")
+
+    print("\n".join(lines))
+
+
+if __name__ == "__main__":
+    main()

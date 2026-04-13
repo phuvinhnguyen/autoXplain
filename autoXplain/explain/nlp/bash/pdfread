@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""pdfread — convert a PDF file to plain text.
+
+Tries backends in order of quality:
+  1. PaddleOCR-VL-1.5  (best for scanned / complex-layout PDFs, needs paddlepaddle + paddleocr)
+  2. markitdown         (pdfminer.six; good for text-based PDFs, needs markitdown)
+  3. pdfminer.six       (direct; lightweight fallback)
+
+Required packages (at least one must be present):
+    pip install paddlepaddle paddleocr          # for backend 1
+    pip install markitdown                      # for backend 2
+    pip install pdfminer.six                    # for backend 3
+"""
+
+DESC = (
+    "Convert a PDF file to plain text (tries PaddleOCR-VL, markitdown, pdfminer in order). "
+    "Usage: pdfread <file.pdf> [--pages START-END] [--backend auto|paddle|markitdown|pdfminer] [--max-chars N]"
+)
+
+import sys
+
+if "--desc" in sys.argv:
+    print(DESC)
+    sys.exit(0)
+
+import argparse
+import os
+
+
+# ---------------------------------------------------------------------------
+# Backends
+# ---------------------------------------------------------------------------
+
+def _read_paddle(pdf_path: str, page_range=None) -> str:
+    """PaddleOCR-VL-1.5: vision-language OCR — best for scanned/complex PDFs."""
+    try:
+        from paddleocr import PaddleOCR
+    except ImportError as e:
+        raise RuntimeError(f"paddleocr not available: {e}")
+
+    # Convert PDF pages to images, then OCR each page
+    try:
+        from pdf2image import convert_from_path
+    except ImportError:
+        raise RuntimeError("pdf2image not available (pip install pdf2image poppler-utils)")
+
+    import tempfile, io
+
+    first, last = (page_range or (None, None))
+    images = convert_from_path(
+        pdf_path,
+        first_page=first,
+        last_page=last,
+        dpi=200,
+    )
+
+    # Use angle classification + VL model (lang-agnostic)
+    ocr = PaddleOCR(use_angle_cls=True, lang="en", use_gpu=False, show_log=False)
+
+    pages_text = []
+    for page_num, img in enumerate(images, start=(first or 1)):
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            img.save(tmp.name)
+            tmp_path = tmp.name
+        try:
+            result = ocr.ocr(tmp_path, cls=True)
+            if result and result[0]:
+                lines = [line[1][0] for line in result[0] if line and line[1]]
+                pages_text.append(f"--- Page {page_num} ---\n" + "\n".join(lines))
+        finally:
+            os.unlink(tmp_path)
+
+    return "\n\n".join(pages_text)
+
+
+def _read_markitdown(pdf_path: str, page_range=None) -> str:
+    """markitdown: fast text extraction via pdfminer.six."""
+    try:
+        from markitdown import MarkItDown
+    except ImportError as e:
+        raise RuntimeError(f"markitdown not available: {e}")
+
+    md = MarkItDown()
+    result = md.convert(pdf_path)
+    text = result.text_content.strip()
+
+    if page_range:
+        # pdfminer doesn't expose per-page boundaries cleanly via markitdown;
+        # do a best-effort slice by splitting on form-feed characters
+        pages = text.split("\x0c")
+        first, last = page_range
+        first = max(1, first) - 1
+        last  = min(len(pages), last)
+        text  = "\n\n".join(pages[first:last])
+
+    return text
+
+
+def _read_pdfminer(pdf_path: str, page_range=None) -> str:
+    """Direct pdfminer.six extraction."""
+    try:
+        from pdfminer.high_level import extract_text
+        from pdfminer.layout import LAParams
+    except ImportError as e:
+        raise RuntimeError(f"pdfminer.six not available: {e}")
+
+    kwargs = {}
+    if page_range:
+        first, last = page_range
+        kwargs["page_numbers"] = list(range(first - 1, last))  # 0-indexed
+
+    return extract_text(pdf_path, laparams=LAParams(), **kwargs).strip()
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Convert a PDF file to plain text."
+    )
+    parser.add_argument("file", help="Path to PDF file")
+    parser.add_argument(
+        "--pages", metavar="START-END",
+        help="Page range to extract, e.g. 1-5 (default: all)"
+    )
+    parser.add_argument(
+        "--backend", choices=["auto", "paddle", "markitdown", "pdfminer"],
+        default="auto",
+        help="OCR/extraction backend (default: auto — tries paddle → markitdown → pdfminer)"
+    )
+    parser.add_argument(
+        "--max-chars", type=int, default=0, metavar="N",
+        help="Truncate output to N characters (default: 0 = unlimited)"
+    )
+    args = parser.parse_args()
+
+    pdf_path = os.path.abspath(args.file)
+    if not os.path.isfile(pdf_path):
+        print(f"Error: file not found: {pdf_path}", file=sys.stderr)
+        sys.exit(1)
+
+    page_range = None
+    if args.pages:
+        try:
+            parts = args.pages.split("-")
+            page_range = (int(parts[0]), int(parts[1]))
+        except Exception:
+            print(f"Error: --pages must be in START-END format (e.g. 1-5)", file=sys.stderr)
+            sys.exit(1)
+
+    backends = {
+        "paddle":      _read_paddle,
+        "markitdown":  _read_markitdown,
+        "pdfminer":    _read_pdfminer,
+    }
+
+    order = (
+        ["paddle", "markitdown", "pdfminer"]
+        if args.backend == "auto"
+        else [args.backend]
+    )
+
+    text = None
+    last_error = None
+    for name in order:
+        try:
+            text = backends[name](pdf_path, page_range)
+            if text and text.strip():
+                print(f"(backend: {name})", file=sys.stderr)
+                break
+        except Exception as e:
+            last_error = f"{name}: {e}"
+            continue
+
+    if not text:
+        print(f"Error: all backends failed. Last error — {last_error}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.max_chars and len(text) > args.max_chars:
+        text = text[:args.max_chars] + f"\n\n... (truncated at {args.max_chars} chars)"
+
+    print(text)
+
+
+if __name__ == "__main__":
+    main()

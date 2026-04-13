@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""webfetch — fetch a URL and convert its content to markdown text.
+
+Handles regular web pages, PDFs (auto-detected by Content-Type or .pdf extension),
+and any other format supported by markitdown.
+
+Required packages: markitdown, requests, beautifulsoup4
+"""
+
+DESC = (
+    "Fetch a URL and convert the content to markdown text (auto-detects HTML/PDF/etc.). "
+    "Usage: webfetch <url> [--save path] [--max-chars N]  "
+    "Options: --save path (save raw bytes to file, e.g. paper.pdf), "
+    "--max-chars N (truncate output, default 8000)"
+)
+
+import sys
+
+if "--desc" in sys.argv:
+    print(DESC)
+    sys.exit(0)
+
+import argparse
+import os
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Fetch a URL and convert its content to markdown text."
+    )
+    parser.add_argument("url", help="URL to fetch")
+    parser.add_argument("--save", metavar="PATH",
+                        help="Also save the raw downloaded bytes to this path")
+    parser.add_argument("--max-chars", type=int, default=8000, metavar="N",
+                        help="Maximum output characters (default: 8000; 0 = unlimited)")
+    args = parser.parse_args()
+
+    try:
+        import requests
+    except ImportError:
+        print("Error: requests not installed. Run: pip install requests", file=sys.stderr)
+        sys.exit(1)
+
+    # --- Download ---
+    try:
+        resp = requests.get(
+            args.url, timeout=30,
+            headers={"User-Agent": "Mozilla/5.0"},
+            allow_redirects=True,
+        )
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"Error fetching {args.url}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    raw_bytes = resp.content
+    content_type = resp.headers.get("Content-Type", "")
+
+    if args.save:
+        save_path = os.path.abspath(args.save)
+        with open(save_path, "wb") as f:
+            f.write(raw_bytes)
+        print(f"Saved {len(raw_bytes)} bytes to: {save_path}")
+
+    # --- Convert to markdown ---
+    text = _to_markdown(args.url, raw_bytes, content_type)
+
+    if args.max_chars and len(text) > args.max_chars:
+        text = text[:args.max_chars] + f"\n\n... (output truncated at {args.max_chars} chars)"
+
+    print(text)
+
+
+def _to_markdown(url: str, raw_bytes: bytes, content_type: str) -> str:
+    """Convert raw response bytes to readable markdown text."""
+    is_pdf = (
+        "pdf" in content_type.lower()
+        or url.lower().split("?")[0].endswith(".pdf")
+    )
+
+    # Try markitdown first — it handles HTML, PDF, Word, Excel, …
+    try:
+        import tempfile
+        from markitdown import MarkItDown
+
+        suffix = ".pdf" if is_pdf else ".html"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(raw_bytes)
+            tmp_path = tmp.name
+
+        try:
+            md = MarkItDown()
+            result = md.convert(tmp_path)
+            return result.text_content.strip()
+        finally:
+            os.unlink(tmp_path)
+    except Exception:
+        pass
+
+    # Fallback for HTML: BeautifulSoup plain-text extraction
+    if "html" in content_type.lower() or not is_pdf:
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(raw_bytes, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer"]):
+                tag.decompose()
+            return soup.get_text(separator="\n", strip=True)
+        except Exception:
+            pass
+
+    # Last resort: decode as UTF-8
+    try:
+        return raw_bytes.decode("utf-8", errors="replace")
+    except Exception as e:
+        return f"(could not convert content: {e})"
+
+
+if __name__ == "__main__":
+    main()
