@@ -1,0 +1,93 @@
+## NLPAgent explaining OvercastLab/Quark-50m-Instruct on a small text-classification dataset.
+#
+# The agent downloads the model into `linked_host_dir` on first run (requires
+# network and huggingface_hub).  Set `model_source: null` if the model is
+# already present in that directory.
+#
+# Sandbox: `env_mode: auto` tries Docker first then falls back to proot.
+# For proot, install with:  apt install proot  (or conda install -c conda-forge proot)
+#
+# Run:
+#   python -m autoXplain.process --config configs/nlp/quark_50m_classification.yaml
+
+explain:
+  name: NLPAgent
+  kwargs:
+    # ---------- model ----------
+    model_source: OvercastLab/Quark-50m-Instruct   # HF hub ID; set null if already downloaded
+    linked_host_dir: /home/phng1216/Thesis/autoXplain/explain_workspace/quark_50m
+    replace_existing: false   # set true to re-download/replace model files
+
+    # ---------- VLM (orchestrator) ----------
+    vlm:
+      name: VLLMClient
+      kwargs:
+        model_name: meta-llama/Llama-3.2-3B-Instruct
+        port: 8000
+        start_server: true     # auto-starts vLLM if not already running
+        max_model_len: 16384   # keep VRAM usage low
+        gpu_memory_utilization: 0.5  # leave headroom for Quark-50m in sandbox
+
+    # ---------- sandbox ----------
+    env_mode: auto           # auto | proot | interactive | isolated
+    sandbox_mount_dir: /workspace
+    sandbox_network_disabled: false  # proot cannot enforce isolation; keep false
+
+    # ---------- agent ----------
+    max_steps: 20
+    max_steps_sub: 10
+
+    # ---------- default research questions ----------
+    questions:
+      - >
+        What is the architecture of this model?
+        Run this single command to extract all architecture details from config.json:
+        python3 -c "import json; c=json.load(open('/workspace/config.json')); h=c['hidden_size']; l=c['num_hidden_layers']; v=c['vocab_size']; i=c.get('intermediate_size',4*h); print('arch:', c.get('architectures')); print('hidden_size:', h); print('num_hidden_layers:', l); print('num_attention_heads:', c.get('num_attention_heads')); print('vocab_size:', v); print('approx_params:', v*h + l*(4*h*h + 3*i*h) + h)"
+        Then submit all values from the output.
+      - >
+        Run the Quark-50m model on the sentiment classification task.
+        A ready-to-run inference script already exists in the workspace.
+        Execute it with: python3 /workspace/run_inference.py
+        The script loads the model from /workspace, reads /workspace/task.jsonl,
+        and prints per-item predictions and overall accuracy.
+        Report the per-class predictions and overall accuracy from the output.
+      - >
+        Write a structured analysis of Quark-50m for sentiment classification.
+        DO NOT run inference — results are already known: the model predicted mostly 'neutral',
+        achieving around 30% accuracy on 20 short sentences.
+        First run: cat /workspace/README.md
+        Then submit a structured answer covering:
+        (a) strengths of the model architecture,
+        (b) why a causal LM defaults to 'neutral' on a 3-class classification prompt,
+        (c) why 50M-parameter causal LMs struggle with classification vs encoder models like BERT.
+
+datasets:
+  - name: NLPProcess
+    ds_name: quark_50m_sentiment
+    model:
+      name: empty    # NLP explainers do not load a PyTorch model via the registry
+
+    # Inline classification dataset (20 short sentences, 3 classes)
+    data:
+      - {text: "I absolutely loved this product, it exceeded my expectations!", label: positive}
+      - {text: "The service was terrible and I will never return.", label: negative}
+      - {text: "It was okay, nothing special but did the job.", label: neutral}
+      - {text: "Best purchase I have ever made in my life!", label: positive}
+      - {text: "Complete waste of money, totally disappointed.", label: negative}
+      - {text: "Arrived on time and works as described.", label: neutral}
+      - {text: "The quality is outstanding and worth every penny.", label: positive}
+      - {text: "Broke after two days, very poor build quality.", label: negative}
+      - {text: "Average experience, meets basic requirements.", label: neutral}
+      - {text: "Highly recommend to anyone looking for this type of product.", label: positive}
+      - {text: "Customer support was rude and unhelpful.", label: negative}
+      - {text: "Delivery was slightly delayed but product is fine.", label: neutral}
+      - {text: "Incredible performance, far better than the competition.", label: positive}
+      - {text: "Stopped working after a week, very frustrating.", label: negative}
+      - {text: "Decent value for the price, no complaints.", label: neutral}
+      - {text: "Exceeded all my expectations, truly impressive.", label: positive}
+      - {text: "The instructions were confusing and the setup was painful.", label: negative}
+      - {text: "Does what it says on the tin, nothing more nothing less.", label: neutral}
+      - {text: "Fantastic experience from start to finish!", label: positive}
+      - {text: "Not worth the money, would not buy again.", label: negative}
+
+output: /home/phng1216/Thesis/autoXplain/outputs/nlp

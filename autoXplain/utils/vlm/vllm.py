@@ -87,14 +87,20 @@ class VLLMClient(VLMBase):
                 'png': 'image/png', 'webp': 'image/webp'}.get(ext, 'image/jpeg')
         return f"data:{mime};base64,{b64}"
 
-    async def _call_api(self, session, sem, image_path: str, text: str, **kwargs) -> str:
-        payload = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": [
+    async def _call_api(self, session, sem, query: Dict[str, Any], **kwargs) -> str:
+        image_path = query.get("image_path")
+        text = query.get("text", "")
+        if image_path:
+            content = [
                 {"type": "image_url", "image_url": {"url": self._encode_image(image_path)}},
                 {"type": "text", "text": text},
-            ]}],
-            "max_tokens": kwargs.get("max_tokens", 512),
+            ]
+        else:
+            content = text  # plain-text query (text-only LLM)
+        payload = {
+            "model": self.model_name,
+            "messages": [{"role": "user", "content": content}],
+            "max_tokens": kwargs.get("max_tokens", 2048),
             "temperature": kwargs.get("temperature", 0.1),
             "repetition_penalty": kwargs.get("repetition_penalty", 1.15),
         }
@@ -110,7 +116,7 @@ class VLLMClient(VLMBase):
             timeout = aiohttp.ClientTimeout(total=3600)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 tasks = [
-                    self._call_api(session, sem, q["image_path"], q["text"], **kwargs)
+                    self._call_api(session, sem, q, **kwargs)
                     for q in queries
                 ]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
